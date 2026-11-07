@@ -1,0 +1,1923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sprite Studio</title>
+<meta name="description" content="A free pixel-art editor for game sprites: layers, animation frames, onion skin, and sprite-sheet, PNG and GIF export. Runs in your browser.">
+<link rel="icon" href="favicon.svg">
+<style>
+@font-face{font-family:Silkscreen;src:url(silkscreen.woff2) format('woff2');font-display:swap}
+:root{
+  --bg:#121317;--panel:#1b1d23;--panel2:#22252c;--line:#2e313a;--text:#e8e8ec;--muted:#8d919c;
+  --accent:#ffcc33;--accent-ink:#1a1400;--danger:#ff5d6c;--ok:#4fd18b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 Inter,system-ui,sans-serif;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:#4a4e5a}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.danger{color:var(--danger)}
+button:disabled{opacity:.4;cursor:default}
+input[type=text],input[type=number],select{background:#14161a;border:1px solid var(--line);border-radius:6px;padding:5px 7px}
+input[type=number]{width:64px}
+label{display:flex;align-items:center;gap:6px}
+#app{display:grid;height:100%;grid-template-columns:52px 1fr 270px;grid-template-rows:48px 1fr 150px;grid-template-areas:"top top top" "tools stage side" "frames frames side"}
+header{grid-area:top;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel);overflow-x:auto}
+.logo{font-family:Silkscreen,monospace;font-size:16px;color:var(--accent);letter-spacing:1px;margin-right:6px;white-space:nowrap}
+#siteLink{color:var(--muted);text-decoration:none;font-size:12px;white-space:nowrap;margin-right:4px}
+#siteLink:hover{color:var(--text)}
+#projName{width:170px;background:transparent;border-color:transparent}
+#projName:hover,#projName:focus{border-color:var(--line);background:#14161a}
+header button{white-space:nowrap}
+.spacer{flex:1}
+#status{color:var(--muted);font-size:12px;white-space:nowrap}
+#status.dirty::before{content:"● ";color:var(--accent)}
+#tools{grid-area:tools;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;overflow-y:auto}
+.tool{width:36px;height:36px;padding:0;display:grid;place-items:center;border-radius:8px;background:transparent;border:1px solid transparent;flex:none}
+.tool svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square}
+.tool.on{background:var(--accent);color:var(--accent-ink)}
+.tool:hover:not(.on){border-color:var(--line)}
+.sep{width:28px;height:1px;background:var(--line);margin:4px 0;flex:none}
+#stage{grid-area:stage;position:relative;overflow:hidden;background:#0d0e11;touch-action:none}
+#tileBg{position:absolute;image-rendering:pixelated;pointer-events:none;display:none}
+#view{position:absolute;image-rendering:pixelated;box-shadow:0 0 0 1px #000,0 8px 30px rgba(0,0,0,.5);touch-action:none;cursor:crosshair}
+#stage.tiling #view{box-shadow:0 0 0 1px rgba(255,204,51,.5)}
+#stage.panning #view{cursor:grab}
+#zoomBox{position:absolute;right:10px;bottom:10px;display:flex;gap:4px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px}
+#zoomBox button{padding:2px 8px}
+#zoomLabel{min-width:44px;text-align:center;color:var(--muted)}
+#coords{position:absolute;left:10px;bottom:10px;color:var(--muted);font-size:12px;background:rgba(0,0,0,.4);padding:3px 8px;border-radius:6px}
+#selBar{position:absolute;left:50%;top:10px;transform:translateX(-50%);display:none;gap:4px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 6px;white-space:nowrap}
+#selBar.show{display:flex}
+#selBar span{color:var(--muted);font-size:12px;margin:0 4px}
+#side{grid-area:side;background:var(--panel);border-left:1px solid var(--line);overflow-y:auto}
+.sec{border-bottom:1px solid var(--line);padding:10px 12px}
+.sec h3{margin:0 0 8px;font:11px Silkscreen,monospace;color:var(--muted);letter-spacing:1px;display:flex;justify-content:space-between;align-items:center}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#colorPick{width:40px;height:32px;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
+#hexIn{width:90px;text-transform:uppercase}
+#palette{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;margin-top:8px}
+.sw{aspect-ratio:1;border-radius:3px;cursor:pointer;border:1px solid rgba(255,255,255,.08)}
+.sw.on{outline:2px solid var(--accent);outline-offset:1px}
+.mini{padding:2px 7px;font-size:12px}
+.hint{color:var(--muted);font-size:11px;margin-top:6px}
+#layers{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;max-height:200px;overflow-y:auto}
+.layer{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;border:1px solid var(--line);cursor:pointer;background:#16181d}
+.layer.on{border-color:var(--accent);background:#2a2614}
+.layer .eye{background:none;border:none;padding:0 2px;color:var(--muted);width:22px}
+.layer .eye.off{opacity:.35}
+.layer .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.layer input{flex:1;min-width:0;padding:1px 4px}
+#preview{width:100%;height:150px;background:#0d0e11;border-radius:6px;image-rendering:pixelated;display:block}
+#frames{grid-area:frames;background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.fbar{display:flex;gap:6px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--line);overflow-x:auto;white-space:nowrap}
+.fbar h3{margin:0 4px 0 0;font:11px Silkscreen,monospace;color:var(--muted)}
+#animTabs{display:flex;gap:4px;align-items:center}
+.atab{padding:3px 10px;border-radius:6px 6px 6px 6px;font-size:12px;background:#16181d}
+.atab.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.atab input{width:100px;padding:0 4px;font-size:12px}
+#frameList{display:flex;gap:6px;padding:8px 10px;overflow-x:auto;flex:1;align-items:center}
+.frame{flex:none;position:relative;width:52px;height:52px;border-radius:6px;border:2px solid var(--line);cursor:pointer;background-color:#2a2c33;background-image:linear-gradient(45deg,#33363e 25%,transparent 25%,transparent 75%,#33363e 75%),linear-gradient(45deg,#33363e 25%,transparent 25%,transparent 75%,#33363e 75%);background-size:10px 10px;background-position:0 0,5px 5px;display:grid;place-items:center;overflow:hidden}
+.frame canvas{max-width:44px;max-height:44px;image-rendering:pixelated}
+.frame.on{border-color:var(--accent)}
+.frame span{position:absolute;left:2px;top:0;font-size:10px;color:var(--muted);text-shadow:0 1px 2px #000}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;place-items:center;z-index:50}
+#modal.open{display:grid}
+.dlg{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:320px;max-width:min(580px,92vw);max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.dlg.wide{max-width:96vw;width:min(1200px,96vw)}
+.dlg h2{margin:0 0 12px;font:15px Silkscreen,monospace;color:var(--accent)}
+.dlg .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;flex-wrap:wrap}
+.dlg .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
+.dlg p{color:var(--muted);margin:6px 0}
+.plist{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.pitem{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.pitem:hover{border-color:var(--accent)}
+.pitem img{width:40px;height:40px;image-rendering:pixelated;object-fit:contain;background:#0d0e11;border-radius:4px}
+.pitem .meta{flex:1}
+.pitem .meta small{color:var(--muted);display:block}
+.expgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.expgrid button{text-align:left;padding:10px}
+.expgrid button small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.tm{display:grid;grid-template-columns:200px 1fr;gap:14px;min-height:0}
+.tm-tiles{max-height:60vh;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:8px}
+.tm-tiles h4{margin:6px 0 4px;font:10px Silkscreen,monospace;color:var(--muted)}
+.tm-tiles .tg{display:flex;flex-wrap:wrap;gap:4px}
+.tm-tiles canvas{width:40px;height:40px;image-rendering:pixelated;border:2px solid var(--line);border-radius:4px;cursor:pointer;background:#2a2c33;object-fit:contain}
+.tm-tiles canvas.on{border-color:var(--accent)}
+.tm-map{overflow:auto;max-height:60vh;background:#0d0e11;border-radius:8px;padding:10px;display:grid;place-items:center}
+.tm-map canvas{image-rendering:pixelated;cursor:crosshair;touch-action:none}
+#toast{position:fixed;left:50%;bottom:170px;transform:translateX(-50%);background:#000;border:1px solid var(--line);padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+#toast.show{opacity:1}
+.menu{position:relative}
+.drop{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px;display:none;flex-direction:column;min-width:220px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.drop.open{display:flex}
+.drop button{background:none;border:none;text-align:left;padding:7px 10px;border-radius:5px}
+.drop button:hover{background:var(--panel2)}
+textarea{width:100%;height:180px;background:#0d0e11;color:var(--text);border:1px solid var(--line);border-radius:6px;font:12px monospace}
+kbd{background:#0d0e11;border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:11px}
+@media (max-width:820px){
+  #app{grid-template-columns:48px 1fr;grid-template-rows:48px 1fr 150px 240px;grid-template-areas:"top top" "tools stage" "frames frames" "side side"}
+  #projName{width:110px}
+  .logo{display:none}
+  .tm{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <a id="siteLink" href="../index.html" hidden>← adamdobrer.ca</a>
+    <div class="logo">SPRITE STUDIO</div>
+    <input id="projName" type="text" value="Untitled sprite" aria-label="Project name">
+    <button id="btnNew">New</button>
+    <button id="btnOpen">Open</button>
+    <button id="btnSave" class="primary">Save</button>
+    <button id="btnCanvas">Canvas ▾</button>
+    <button id="btnTilemap" title="Lay your tiles out into a test map">Tile map</button>
+    <button id="btnExport">Export</button>
+    <div class="spacer"></div>
+    <div id="status">Ready</div>
+  </header>
+  <div class="drop" id="canvasDrop">
+    <button data-act="resize">Resize canvas…</button>
+    <button data-act="flipH">Flip horizontally</button>
+    <button data-act="flipV">Flip vertically</button>
+    <button data-act="rotate">Rotate 90° (square only)</button>
+    <button data-act="swap">Colour swap / make a variant…</button>
+    <button data-act="clear">Clear layer</button>
+    <button data-act="import">Import image…</button>
+    <button data-act="help">Shortcuts</button>
+  </div>
+
+  <nav id="tools" aria-label="Tools">
+    <button class="tool on" data-tool="pencil" title="Pencil (B)"><svg viewBox="0 0 24 24"><path d="M4 20l3-1 11-11-2-2L5 17z"/><path d="M14 6l4 4"/></svg></button>
+    <button class="tool" data-tool="eraser" title="Eraser (E) — right-click also erases"><svg viewBox="0 0 24 24"><path d="M3 17l8-8 7 7-4 4H7z"/><path d="M14 20h7"/></svg></button>
+    <button class="tool" data-tool="fill" title="Fill (G) — Shift: replace colour everywhere"><svg viewBox="0 0 24 24"><path d="M5 11l7-7 7 7-7 7z"/><path d="M20 15c0 2-1 3-1.5 3S17 17 17 15l1.5-2z"/></svg></button>
+    <button class="tool" data-tool="picker" title="Colour picker (I) — Alt-click with any tool"><svg viewBox="0 0 24 24"><path d="M14 4l6 6-2 2-6-6z"/><path d="M13 9l-8 8v3h3l8-8"/></svg></button>
+    <button class="tool" data-tool="shade" title="Shade (H) — click darkens, right-click lightens"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 010 16z" fill="currentColor"/></svg></button>
+    <div class="sep"></div>
+    <button class="tool" data-tool="line" title="Line (L) — Shift: snap angle"><svg viewBox="0 0 24 24"><path d="M5 19L19 5"/></svg></button>
+    <button class="tool" data-tool="rect" title="Rectangle (R) — Shift: filled"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg></button>
+    <button class="tool" data-tool="ellipse" title="Ellipse (O) — Shift: filled"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/></svg></button>
+    <div class="sep"></div>
+    <button class="tool" data-tool="select" title="Select (S) — drag to select, drag inside to move. Ctrl+C / X / V"><svg viewBox="0 0 24 24" style="stroke-dasharray:3 2.5"><rect x="4" y="4" width="16" height="16"/></svg></button>
+    <button class="tool" data-tool="boxes" title="Hit areas (K) — body and attack boxes, and the origin point"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="11" height="13"/><rect x="12" y="4" width="9" height="7" style="stroke-dasharray:2 2"/></svg></button>
+    <button class="tool" data-tool="move" title="Move layer (M) — wraps around in tile mode"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg></button>
+    <div class="sep"></div>
+    <button class="tool" id="btnUndo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg></button>
+    <button class="tool" id="btnRedo" title="Redo (Ctrl+Shift+Z)"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg></button>
+  </nav>
+
+  <main id="stage">
+    <canvas id="tileBg"></canvas>
+    <canvas id="view"></canvas>
+    <div id="selBar">
+      <span id="selInfo"></span>
+      <button class="mini" data-sel="copy" title="Ctrl+C">Copy</button>
+      <button class="mini" data-sel="cut" title="Ctrl+X">Cut</button>
+      <button class="mini" data-sel="paste" title="Ctrl+V">Paste</button>
+      <button class="mini" data-sel="flipH" title="Flip horizontally">⇋</button>
+      <button class="mini" data-sel="flipV" title="Flip vertically">⇵</button>
+      <button class="mini danger" data-sel="delete" title="Delete">Delete</button>
+      <button class="mini" data-sel="done" title="Enter / Esc">Done</button>
+    </div>
+    <div id="coords">–</div>
+    <div id="zoomBox">
+      <button id="zOut" title="Zoom out (-)">−</button>
+      <span id="zoomLabel">100%</span>
+      <button id="zIn" title="Zoom in (+)">+</button>
+      <button id="zFit" title="Fit (0)">Fit</button>
+    </div>
+  </main>
+
+  <aside id="side">
+    <div class="sec">
+      <h3>Colour</h3>
+      <div class="row">
+        <input type="color" id="colorPick" value="#ff004d" aria-label="Colour">
+        <input type="text" id="hexIn" value="#FF004D" maxlength="7" aria-label="Hex colour">
+        <button class="mini" id="addSwatch" title="Add colour to palette">+ Palette</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <select id="presetSel" style="flex:1" aria-label="Palette preset"></select>
+      </div>
+      <div id="palette"></div>
+      <div class="hint">Click a swatch to use it · Shift-click to remove it</div>
+    </div>
+    <div class="sec">
+      <h3>Tool options</h3>
+      <div class="row" style="gap:12px">
+        <label>Brush <input type="number" id="brushIn" min="1" max="8" value="1"></label>
+        <label><input type="checkbox" id="mirX"> Mirror ↔</label>
+        <label><input type="checkbox" id="mirY"> Mirror ↕</label>
+      </div>
+      <div class="row" style="gap:12px;margin-top:8px">
+        <label><input type="checkbox" id="gridChk" checked> Grid</label>
+        <label><input type="checkbox" id="onionChk"> Onion skin</label>
+        <label title="Shows the sprite repeated around itself so you can check tile seams (T)"><input type="checkbox" id="tileChk"> Tile mode</label>
+      </div>
+      <div class="row" style="gap:12px;margin-top:8px">
+        <label title="Paint in a checkerboard pattern: pencil, line, shapes and fill (D)"><input type="checkbox" id="ditherChk"> Dither</label>
+        <label title="Shade tool picks the next darker or lighter colour from your palette"><input type="checkbox" id="snapChk" checked> Shade from palette</label>
+        <label title="Show hit areas with every tool"><input type="checkbox" id="boxesChk"> Show hit areas</label>
+      </div>
+      <div id="boxOpts" style="display:none;margin-top:10px;border-top:1px solid var(--line);padding-top:10px">
+        <div class="row" style="gap:10px">
+          <label><input type="radio" name="bk" value="body" checked> <span style="color:#41a6f6">■</span> Body</label>
+          <label><input type="radio" name="bk" value="attack"> <span style="color:#ff5d6c">■</span> Attack</label>
+          <label><input type="radio" name="bk" value="origin"> <span style="color:#ffcc33">✚</span> Origin</label>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="mini" id="bCopy" title="Copy the previous frame's boxes onto this one">Copy from previous frame</button>
+          <button class="mini danger" id="bClear">Clear frame</button>
+        </div>
+        <div class="hint">Body = where it can be hit and what bumps into walls. Attack = where its attack hits. Drag to draw, drag a box to move it, drag its bottom-right corner to resize, Delete removes. Origin = the point that sits on the ground (usually between the feet).</div>
+      </div>
+    </div>
+    <div class="sec">
+      <h3>Layers <span class="row" style="gap:3px">
+        <button class="mini" id="lAdd" title="New layer">+</button>
+        <button class="mini" id="lDup" title="Duplicate layer">⧉</button>
+        <button class="mini" id="lUp" title="Move up">↑</button>
+        <button class="mini" id="lDown" title="Move down">↓</button>
+        <button class="mini" id="lMerge" title="Merge down">⤓</button>
+        <button class="mini danger" id="lDel" title="Delete layer">✕</button>
+      </span></h3>
+      <div id="layers"></div>
+      <div class="hint">Layers are shared by every animation · Double-click a name to rename</div>
+    </div>
+    <div class="sec">
+      <h3>Preview <span class="row" style="gap:6px">
+        <label style="font-family:Inter;font-size:12px;color:var(--muted)">FPS <input type="number" id="fpsIn" min="1" max="60" value="8" style="width:52px"></label>
+        <button class="mini" id="playBtn">▶ Play</button>
+      </span></h3>
+      <canvas id="preview" width="240" height="150"></canvas>
+      <div class="hint" id="previewInfo"></div>
+    </div>
+  </aside>
+
+  <section id="frames">
+    <div class="fbar">
+      <h3>ANIMATIONS</h3>
+      <div id="animTabs"></div>
+      <button class="mini" id="aAdd" title="New animation, starting from a copy of the current frame">+ Animation</button>
+      <label style="font-size:12px;color:var(--muted)" title="Loop this animation (off for one-shots like a jump or death)"><input type="checkbox" id="loopChk" checked> Loop</label>
+      <button class="mini" id="aRename">Rename</button>
+      <button class="mini danger" id="aDel" title="Delete this animation">✕ Delete animation</button>
+    </div>
+    <div class="fbar">
+      <h3>FRAMES</h3>
+      <button class="mini" id="fAdd" title="New blank frame">+ New</button>
+      <button class="mini" id="fDup" title="Duplicate frame">⧉ Duplicate</button>
+      <button class="mini" id="fLeft" title="Move left">◀</button>
+      <button class="mini" id="fRight" title="Move right">▶</button>
+      <button class="mini danger" id="fDel" title="Delete frame">✕ Delete</button>
+      <span class="spacer"></span>
+      <span id="frameInfo" style="color:var(--muted);font-size:12px"></span>
+    </div>
+    <div id="frameList"></div>
+  </section>
+</div>
+
+<div id="modal"><div class="dlg" id="dlg"></div></div>
+<div id="toast"></div>
+<input type="file" id="fileImg" accept="image/*" hidden>
+<input type="file" id="fileProj" accept=".json,application/json" hidden>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const el = (tag, props = {}, kids = []) => { const e = document.createElement(tag); Object.assign(e, props); for (const k of [].concat(kids)) e.append(k); return e; };
+
+// ---------- palettes ----------
+const PRESETS = {
+  'PICO-8': '000000 1D2B53 7E2553 008751 AB5236 5F574F C2C3C7 FFF1E8 FF004D FFA300 FFEC27 00E436 29ADFF 83769C FF77A8 FFCCAA',
+  'Sweetie 16': '1A1C2C 5D275D B13E53 EF7D57 FFCD75 A7F070 38B764 257179 29366F 3B5DC9 41A6F6 73EFF7 F4F4F4 94B0C2 566C86 333C57',
+  'Game Boy': '0F380F 306230 8BAC0F 9BBC0F',
+  'Grayscale': '000000 242424 494949 6D6D6D 929292 B6B6B6 DBDBDB FFFFFF',
+  'Earth & sky': '2B1D14 4E3524 7A5236 A8774A D3A86E F2D7A0 2E4A3A 4F7A4F 86B05C C6DE84 1E2F55 35558F 5A8BD0 9CC6F0 E8F4FF FFFFFF'
+};
+const presetList = name => PRESETS[name].split(' ').map(h => '#' + h);
+
+// ---------- colour helpers ----------
+const hexToU32 = hex => { const n = parseInt(hex.slice(1), 16); return ((255 << 24) | ((n & 255) << 16) | (((n >> 8) & 255) << 8) | ((n >> 16) & 255)) >>> 0; };
+const u32ToHex = v => '#' + [v & 255, (v >> 8) & 255, (v >> 16) & 255].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+const rid = () => Math.random().toString(36).slice(2, 10);
+
+// ---------- state ----------
+// A project has shared layers and several named animations; each animation has its own frames.
+let S;
+let ca = 0, cf = 0, cl = 0;          // current animation, frame, layer
+let tool = 'pencil', prevTool = 'pencil', brush = 1, mirX = false, mirY = false, onion = false, showGrid = true, tileMode = false;
+let dither = false, shadeSnap = true, showBoxes = false, boxKind = 'body', selBox = -1, paintDither = false;
+let color = '#FF004D';
+let zoom = 16, panX = 0, panY = 0;
+let dirty = false;
+const undoStack = [], redoStack = [];
+
+const blankFrame = (w, h, n) => ({ id: rid(), cells: Array.from({ length: n }, () => new Uint32Array(w * h)), boxes: [] });
+const copyBoxes = f => (f.boxes || []).map(b => ({ ...b }));
+function newProject(w, h, name = 'Untitled sprite') {
+  return { id: 'p-' + rid(), name, w, h,
+    layers: [{ name: 'Layer 1', visible: true }],
+    anims: [{ name: 'idle', fps: 8, loop: true, frames: [blankFrame(w, h, 1)] }],
+    palette: presetList('PICO-8'), tilemap: { w: 12, h: 8, tiles: [] }, origin: { x: Math.floor(w / 2), y: h - 1 } };
+}
+const A = () => S.anims[ca];
+const FR = () => A().frames;
+const cell = (f = cf, l = cl) => FR()[f].cells[l];
+const allFrames = () => S.anims.flatMap(a => a.frames);
+
+// ---------- elements ----------
+const stage = $('#stage'), view = $('#view'), vctx = view.getContext('2d');
+const tileBg = $('#tileBg'), tctx = tileBg.getContext('2d');
+const off = document.createElement('canvas'), octx = off.getContext('2d');
+const prev = $('#preview'), pctx = prev.getContext('2d');
+
+// ---------- selection state ----------
+let sel = null;     // {x,y,w,h} selected box, in canvas pixels
+let flt = null;     // lifted pixels being moved: {x,y,w,h,px,before,a,f,l}
+let clip = null;    // copied pixels: {x,y,w,h,px}
+
+// ---------- composite ----------
+function composite(fr, out) {
+  out.fill(0);
+  for (let l = 0; l < S.layers.length; l++) {
+    if (!S.layers[l].visible) continue;
+    const c = fr.cells[l];
+    for (let i = 0; i < c.length; i++) if (c[i]) out[i] = c[i];
+    if (flt && l === flt.l && S.anims[flt.a] && S.anims[flt.a].frames[flt.f] === fr) stampFloat(out);
+  }
+  return out;
+}
+function stampFloat(out) {
+  for (let y = 0; y < flt.h; y++) for (let x = 0; x < flt.w; x++) {
+    const v = flt.px[y * flt.w + x]; if (!v) continue;
+    const tx = flt.x + x, ty = flt.y + y;
+    if (tx >= 0 && ty >= 0 && tx < S.w && ty < S.h) out[ty * S.w + tx] = v;
+  }
+}
+function frameImage(fr) {
+  const img = new ImageData(S.w, S.h);
+  composite(fr, new Uint32Array(img.data.buffer));
+  return img;
+}
+
+// ---------- rendering ----------
+let checker;
+function makeChecker() {
+  const c = document.createElement('canvas'); c.width = c.height = 16;
+  const x = c.getContext('2d'); x.fillStyle = '#3a3d45'; x.fillRect(0, 0, 16, 16);
+  x.fillStyle = '#2c2e35'; x.fillRect(0, 0, 8, 8); x.fillRect(8, 8, 8, 8);
+  checker = vctx.createPattern(c, 'repeat');
+}
+let hover = null, rq = false, drawing = null;
+function requestRender() { if (!rq) { rq = true; requestAnimationFrame(render); } }
+function placeView() {
+  const W = S.w * zoom, H = S.h * zoom;
+  const left = Math.round((stage.clientWidth - W) / 2 + panX), top = Math.round((stage.clientHeight - H) / 2 + panY);
+  view.style.left = left + 'px'; view.style.top = top + 'px';
+  tileBg.style.left = (left - W) + 'px'; tileBg.style.top = (top - H) + 'px';
+  $('#zoomLabel').textContent = (zoom * 100) + '%';
+}
+function render() {
+  rq = false;
+  const W = S.w * zoom, H = S.h * zoom;
+  if (view.width !== W || view.height !== H) { view.width = W; view.height = H; makeChecker(); }
+  if (off.width !== S.w || off.height !== S.h) { off.width = S.w; off.height = S.h; }
+  placeView();
+  vctx.imageSmoothingEnabled = false;
+  vctx.fillStyle = checker; vctx.fillRect(0, 0, W, H);
+  if (onion && FR().length > 1) {
+    const pf = (cf - 1 + FR().length) % FR().length;
+    octx.putImageData(frameImage(FR()[pf]), 0, 0);
+    vctx.globalAlpha = .28; vctx.drawImage(off, 0, 0, W, H); vctx.globalAlpha = 1;
+  }
+  octx.putImageData(frameImage(FR()[cf]), 0, 0);
+  vctx.drawImage(off, 0, 0, W, H);
+  // tile mode: the same image repeated around the canvas, a little dimmer
+  stage.classList.toggle('tiling', tileMode);
+  tileBg.style.display = tileMode ? 'block' : 'none';
+  if (tileMode) {
+    if (tileBg.width !== W * 3 || tileBg.height !== H * 3) { tileBg.width = W * 3; tileBg.height = H * 3; }
+    tctx.imageSmoothingEnabled = false;
+    tctx.clearRect(0, 0, W * 3, H * 3);
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) if (i !== 1 || j !== 1) tctx.drawImage(off, i * W, j * H, W, H);
+    tctx.fillStyle = 'rgba(13,14,17,.28)'; tctx.fillRect(0, 0, W * 3, H * 3);
+  }
+  if (showGrid && zoom >= 6) {
+    vctx.strokeStyle = 'rgba(255,255,255,.11)'; vctx.lineWidth = 1; vctx.beginPath();
+    for (let x = 1; x < S.w; x++) { vctx.moveTo(x * zoom + .5, 0); vctx.lineTo(x * zoom + .5, H); }
+    for (let y = 1; y < S.h; y++) { vctx.moveTo(0, y * zoom + .5); vctx.lineTo(W, y * zoom + .5); }
+    vctx.stroke();
+    if (S.w % 8 === 0 && S.w >= 16) {
+      vctx.strokeStyle = 'rgba(255,255,255,.22)'; vctx.beginPath();
+      for (let x = 8; x < S.w; x += 8) { vctx.moveTo(x * zoom + .5, 0); vctx.lineTo(x * zoom + .5, H); }
+      for (let y = 8; y < S.h; y += 8) { vctx.moveTo(0, y * zoom + .5); vctx.lineTo(W, y * zoom + .5); }
+      vctx.stroke();
+    }
+  }
+  if (sel) {
+    const r = flt || sel;
+    const x = r.x * zoom + .5, y = r.y * zoom + .5, w = r.w * zoom - 1, h = r.h * zoom - 1;
+    vctx.lineWidth = 1; vctx.setLineDash([4, 4]);
+    vctx.strokeStyle = '#000'; vctx.lineDashOffset = 0; vctx.strokeRect(x, y, w, h);
+    vctx.strokeStyle = '#fff'; vctx.lineDashOffset = 4; vctx.strokeRect(x, y, w, h);
+    vctx.setLineDash([]);
+  }
+  if (tool === 'boxes' || showBoxes) drawBoxes();
+  if (hover && !drawing && ['pencil', 'eraser', 'shade', 'line', 'rect', 'ellipse'].includes(tool)) {
+    const o = Math.floor((brush - 1) / 2);
+    vctx.strokeStyle = 'rgba(255,255,255,.8)';
+    vctx.strokeRect((hover.x - o) * zoom + .5, (hover.y - o) * zoom + .5, brush * zoom - 1, brush * zoom - 1);
+  }
+  const bar = $('#selBar'); bar.classList.toggle('show', !!sel || (tool === 'select' && !!clip));
+  if (sel) { const r = flt || sel; $('#selInfo').textContent = `${r.w}×${r.h}${flt ? ' · moving' : ''}`; } else $('#selInfo').textContent = 'Nothing selected';
+  updateThumb(cf);
+  if (!playing) drawPreview(cf);
+}
+
+// ---------- preview ----------
+let playing = false, playFrame = 0, playTimer = null;
+function drawPreview(f) {
+  const cw = prev.clientWidth || 240, ch = 150;
+  if (prev.width !== cw) prev.width = cw;
+  prev.height = ch;
+  pctx.imageSmoothingEnabled = false;
+  pctx.clearRect(0, 0, cw, ch);
+  const fr = FR()[Math.min(f, FR().length - 1)];
+  octx.putImageData(frameImage(fr), 0, 0);
+  const fitS = Math.min((cw - 12) / S.w, (ch - 12) / S.h);
+  const s = fitS < 1 ? fitS : Math.floor(fitS);
+  const w = S.w * s, h = S.h * s;
+  pctx.drawImage(off, Math.round((cw - w) / 2), Math.round((ch - h) / 2), w, h);
+  $('#previewInfo').textContent = `“${A().name}” · ${FR().length} frame${FR().length === 1 ? '' : 's'} · ${A().fps} fps${A().loop ? ' · loops' : ' · plays once'}`;
+}
+function tick() {
+  const n = FR().length;
+  if (playFrame >= n) playFrame = A().loop ? 0 : n - 1;
+  drawPreview(playFrame);
+  if (!A().loop && playFrame === n - 1) { playTimer = setTimeout(() => { playFrame = 0; tick(); }, 900); return; } // pause, then replay a one-shot
+  playFrame = (playFrame + 1) % n;
+  playTimer = setTimeout(tick, 1000 / A().fps);
+}
+function setPlaying(p) {
+  playing = p; clearTimeout(playTimer);
+  $('#playBtn').textContent = p ? '■ Stop' : '▶ Play';
+  if (p) { playFrame = cf; tick(); } else drawPreview(cf);
+}
+
+// ---------- frames / animations / layers UI ----------
+const thumbs = [];
+function buildAnims() {
+  const box = $('#animTabs'); box.textContent = '';
+  S.anims.forEach((an, i) => {
+    const b = el('button', { className: 'atab' + (i === ca ? ' on' : ''), textContent: an.name, title: 'Double-click to rename' });
+    b.onclick = () => { if (i !== ca) { commitFloat(); ca = i; cf = 0; refreshAll(); } };
+    b.ondblclick = () => renameAnim(i);
+    box.append(b);
+  });
+  $('#loopChk').checked = A().loop;
+  $('#fpsIn').value = A().fps;
+}
+function renameAnim(i) {
+  const tab = $('#animTabs').children[i]; if (!tab) return;
+  const an = S.anims[i];
+  const inp = el('input', { type: 'text', value: an.name });
+  tab.textContent = ''; tab.append(inp); inp.focus(); inp.select();
+  inp.onclick = e => e.stopPropagation();
+  const done = () => {
+    const v = inp.value.trim().slice(0, 40);
+    if (v && v !== an.name) {
+      if (S.anims.some((o, j) => j !== i && o.name === v)) toast('Another animation already has that name');
+      else { an.name = v; markDirty(); }
+    }
+    buildAnims(); drawPreview(cf);
+  };
+  inp.onblur = done; inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = an.name; inp.blur(); } };
+}
+function buildFrames() {
+  const list = $('#frameList'); list.textContent = ''; thumbs.length = 0;
+  FR().forEach((fr, i) => {
+    const c = el('canvas', { width: S.w, height: S.h });
+    const ar = S.w / S.h; c.style.width = (ar >= 1 ? 44 : 44 * ar) + 'px'; c.style.height = (ar >= 1 ? 44 / ar : 44) + 'px';
+    const d = el('div', { className: 'frame' + (i === cf ? ' on' : ''), title: 'Frame ' + (i + 1) }, [c, el('span', { textContent: i + 1 })]);
+    d.onclick = () => goFrame(i);
+    list.append(d); thumbs.push(c);
+    c.getContext('2d').putImageData(frameImage(fr), 0, 0);
+  });
+  $('#frameInfo').textContent = `Frame ${cf + 1} of ${FR().length} · ${S.w}×${S.h}px`;
+  const on = list.children[cf]; if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+function goFrame(i) { commitFloat(); selBox = -1; cf = i; buildFrames(); requestRender(); }
+function updateThumb(f) { const c = thumbs[f]; if (c && c.width === S.w && c.height === S.h && FR()[f]) c.getContext('2d').putImageData(frameImage(FR()[f]), 0, 0); }
+function buildLayers() {
+  const box = $('#layers'); box.textContent = '';
+  for (let i = S.layers.length - 1; i >= 0; i--) {
+    const L = S.layers[i];
+    const eye = el('button', { className: 'eye' + (L.visible ? '' : ' off'), textContent: '👁', title: 'Show / hide' });
+    eye.onclick = e => { e.stopPropagation(); L.visible = !L.visible; markDirty(); buildLayers(); buildFrames(); requestRender(); };
+    const nm = el('span', { className: 'nm', textContent: L.name });
+    const row = el('div', { className: 'layer' + (i === cl ? ' on' : '') }, [eye, nm]);
+    row.onclick = () => { if (cl !== i) { commitFloat(); cl = i; buildLayers(); } };
+    nm.ondblclick = () => {
+      const inp = el('input', { type: 'text', value: L.name });
+      nm.replaceWith(inp); inp.focus(); inp.select();
+      const done = () => { const v = inp.value.trim(); if (v && v !== L.name) { L.name = v; markDirty(); } buildLayers(); };
+      inp.onblur = done; inp.onkeydown = e => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = L.name; inp.blur(); } };
+    };
+    box.append(row);
+  }
+}
+function buildPalette() {
+  const box = $('#palette'); box.textContent = '';
+  S.palette.forEach((hx, i) => {
+    const sw = el('div', { className: 'sw' + (hx.toUpperCase() === color ? ' on' : ''), title: hx });
+    sw.style.background = hx;
+    sw.onclick = e => {
+      if (e.shiftKey) { S.palette.splice(i, 1); markDirty(); buildPalette(); return; }
+      setColor(hx);
+    };
+    box.append(sw);
+  });
+}
+function setColor(hx) {
+  color = hx.toUpperCase();
+  $('#colorPick').value = color.toLowerCase(); $('#hexIn').value = color;
+  buildPalette();
+}
+function refreshAll() {
+  ca = Math.min(ca, S.anims.length - 1); cf = Math.min(cf, FR().length - 1); cl = Math.min(cl, S.layers.length - 1);
+  $('#projName').value = S.name;
+  buildAnims(); buildLayers(); buildFrames(); buildPalette(); requestRender();
+}
+
+// ---------- history ----------
+const cloneFrame = f => ({ id: f.id, cells: f.cells.map(c => c.slice()), boxes: copyBoxes(f) });
+function snapshot() {
+  return { w: S.w, h: S.h, origin: { ...S.origin }, layers: S.layers.map(l => ({ ...l })),
+    anims: S.anims.map(a => ({ name: a.name, fps: a.fps, loop: a.loop, frames: a.frames.map(cloneFrame) })), ca, cf, cl };
+}
+function restore(s) {
+  S.w = s.w; S.h = s.h; S.origin = { ...s.origin }; S.layers = s.layers.map(l => ({ ...l })); selBox = -1;
+  S.anims = s.anims.map(a => ({ name: a.name, fps: a.fps, loop: a.loop, frames: a.frames.map(cloneFrame) }));
+  ca = Math.min(s.ca, S.anims.length - 1); cf = Math.min(s.cf, FR().length - 1); cl = Math.min(s.cl, S.layers.length - 1);
+}
+function pushHist(e) { undoStack.push(e); if (undoStack.length > 300) undoStack.shift(); redoStack.length = 0; markDirty(); }
+function struct(fn) { commitFloat(); const b = snapshot(); const r = fn(); if (r === false) return; pushHist({ t: 'st', before: b, after: snapshot() }); refreshAll(); }
+function pxCell(e) { const a = S.anims[e.a]; const f = a && a.frames[e.f]; return f && f.cells[e.l]; }
+function undo() {
+  commitFloat();
+  const e = undoStack.pop(); if (!e) return;
+  if (e.t === 'px') { const c = pxCell(e); if (c) c.set(e.before); ca = e.a; cf = e.f; cl = e.l; } else restore(e.before);
+  redoStack.push(e); markDirty(); refreshAll();
+}
+function redo() {
+  commitFloat();
+  const e = redoStack.pop(); if (!e) return;
+  if (e.t === 'px') { const c = pxCell(e); if (c) c.set(e.after); ca = e.a; cf = e.f; cl = e.l; } else restore(e.after);
+  undoStack.push(e); markDirty(); refreshAll();
+}
+function pushPx(before) {
+  const c = cell(); let changed = false;
+  for (let i = 0; i < c.length; i++) if (c[i] !== before[i]) { changed = true; break; }
+  if (changed) pushHist({ t: 'px', a: ca, f: cf, l: cl, before, after: c.slice() });
+  return changed;
+}
+
+// ---------- drawing primitives ----------
+function setPx(c, x, y, v) { if (x >= 0 && y >= 0 && x < S.w && y < S.h && !(paintDither && ((x + y) & 1))) c[y * S.w + x] = v; }
+function setPxM(c, x, y, v) {
+  setPx(c, x, y, v);
+  if (mirX) setPx(c, S.w - 1 - x, y, v);
+  if (mirY) setPx(c, x, S.h - 1 - y, v);
+  if (mirX && mirY) setPx(c, S.w - 1 - x, S.h - 1 - y, v);
+}
+function plot(c, x, y, v) {
+  const o = Math.floor((brush - 1) / 2);
+  for (let j = 0; j < brush; j++) for (let i = 0; i < brush; i++) setPxM(c, x - o + i, y - o + j, v);
+}
+function bline(x0, y0, x1, y1, fn) {
+  const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (let n = 0; n < 100000; n++) {
+    fn(x0, y0);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+function drawRect(c, a, b, v, filled) {
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++)
+    if (filled) setPxM(c, x, y, v);
+    else if (x === x0 || x === x1 || y === y0 || y === y1) plot(c, x, y, v);
+}
+function drawEllipse(c, a, b, v, filled) {
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rx = (x1 - x0) / 2 + .5, ry = (y1 - y0) / 2 + .5;
+  const inside = (x, y) => { const dx = (x - cx) / rx, dy = (y - cy) / ry; return dx * dx + dy * dy <= 1.0001; };
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (!inside(x, y)) continue;
+    if (filled) setPxM(c, x, y, v);
+    else if (!inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1)) plot(c, x, y, v);
+  }
+}
+function floodFill(c, x, y, v, global) {
+  if (x < 0 || y < 0 || x >= S.w || y >= S.h) return false;
+  const target = c[y * S.w + x];
+  if (target === v) return false;
+  const skip = i => dither && (((i % S.w) + ((i / S.w) | 0)) & 1);
+  if (global) { for (let i = 0; i < c.length; i++) if (c[i] === target && !skip(i)) c[i] = v; return true; }
+  const seen = new Uint8Array(c.length), st = [y * S.w + x];
+  while (st.length) {
+    const i = st.pop();
+    if (seen[i] || c[i] !== target) continue;
+    seen[i] = 1;
+    const px = i % S.w, py = (i / S.w) | 0;
+    if (px > 0) st.push(i - 1);
+    if (px < S.w - 1) st.push(i + 1);
+    if (py > 0) st.push(i - S.w);
+    if (py < S.h - 1) st.push(i + S.w);
+  }
+  for (let i = 0; i < c.length; i++) if (seen[i] && !skip(i)) c[i] = v;
+  return true;
+}
+
+// ---------- shading ----------
+const rgbOf = v => [v & 255, (v >> 8) & 255, (v >> 16) & 255];
+const lum = ([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b;
+const toU32 = ([r, g, b]) => ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+function shadeColor(v, dir) {
+  const c = rgbOf(v), L = lum(c);
+  if (shadeSnap && S.palette.length) {
+    // the closest palette colour that is darker (or lighter) than this one, like stepping along a colour ramp
+    let best = null, bd = Infinity;
+    for (const hx of S.palette) {
+      const p = rgbOf(hexToU32(hx));
+      if (dir < 0 ? lum(p) >= L - 2 : lum(p) <= L + 2) continue;
+      const d = (p[0] - c[0]) ** 2 * 2 + (p[1] - c[1]) ** 2 * 4 + (p[2] - c[2]) ** 2 * 3;
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best ? toU32(best) : v;
+  }
+  // otherwise: shift lightness, and nudge the hue (cooler shadows, warmer highlights)
+  let [r, g, b] = c.map(x => x / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h = 0, sat = 0, l = (mx + mn) / 2;
+  if (mx !== mn) { const d = mx - mn; sat = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6; }
+  l = Math.max(0, Math.min(1, l + dir * 0.1));
+  const toward = dir < 0 ? 0.67 : 0.14; h += (toward - h) * 0.06;
+  const q = l < .5 ? l * (1 + sat) : l + sat - l * sat, pp = 2 * l - q;
+  const f = t => { t = (t + 1) % 1; return t < 1 / 6 ? pp + (q - pp) * 6 * t : t < .5 ? q : t < 2 / 3 ? pp + (q - pp) * (2 / 3 - t) * 6 : pp; };
+  return toU32([f(h + 1 / 3), f(h), f(h - 1 / 3)].map(x => Math.round(x * 255)));
+}
+
+// ---------- selection ----------
+const inRect = (r, p) => r && p.x >= r.x && p.y >= r.y && p.x < r.x + r.w && p.y < r.y + r.h;
+function copyRegion(c, r) {
+  const px = new Uint32Array(r.w * r.h);
+  for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) px[y * r.w + x] = c[(r.y + y) * S.w + r.x + x];
+  return px;
+}
+function lift() {
+  // cut the selected pixels out of the layer so they can be moved
+  if (flt || !sel) return;
+  const c = cell(), before = c.slice(), px = copyRegion(c, sel);
+  for (let y = 0; y < sel.h; y++) for (let x = 0; x < sel.w; x++) c[(sel.y + y) * S.w + sel.x + x] = 0;
+  flt = { ...sel, px, before, a: ca, f: cf, l: cl };
+}
+function commitFloat() {
+  if (!flt) return;
+  const f = flt; flt = null;
+  const fr = S.anims[f.a] && S.anims[f.a].frames[f.f]; const c = fr && fr.cells[f.l];
+  if (c) {
+    for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) {
+      const v = f.px[y * f.w + x]; if (!v) continue;
+      const tx = f.x + x, ty = f.y + y;
+      if (tx >= 0 && ty >= 0 && tx < S.w && ty < S.h) c[ty * S.w + tx] = v;
+    }
+    let changed = false; for (let i = 0; i < c.length; i++) if (c[i] !== f.before[i]) { changed = true; break; }
+    if (changed) pushHist({ t: 'px', a: f.a, f: f.f, l: f.l, before: f.before, after: c.slice() });
+  }
+  sel = clampRect({ x: f.x, y: f.y, w: f.w, h: f.h });
+  requestRender();
+}
+function clampRect(r) {
+  const x0 = Math.max(0, r.x), y0 = Math.max(0, r.y), x1 = Math.min(S.w, r.x + r.w), y1 = Math.min(S.h, r.y + r.h);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+function clampRectTo(b, W, H) {
+  const x0 = Math.max(0, b.x), y0 = Math.max(0, b.y), x1 = Math.min(W, b.x + b.w), y1 = Math.min(H, b.y + b.h);
+  return x1 > x0 && y1 > y0 ? { ...b, x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+function deselect() { commitFloat(); sel = null; requestRender(); }
+function selCopy() {
+  if (flt) clip = { x: flt.x, y: flt.y, w: flt.w, h: flt.h, px: flt.px.slice() };
+  else if (sel) clip = { ...sel, px: copyRegion(cell(), sel) };
+  else return toast('Select something first (S)');
+  toast('Copied ' + clip.w + '×' + clip.h);
+  requestRender();
+}
+function selDelete() {
+  if (flt) { const before = flt.before; flt = null; pushPx(before); requestRender(); return; }
+  if (!sel) return;
+  const c = cell(), before = c.slice();
+  for (let y = 0; y < sel.h; y++) for (let x = 0; x < sel.w; x++) c[(sel.y + y) * S.w + sel.x + x] = 0;
+  pushPx(before); requestRender();
+}
+function selCut() { if (!sel && !flt) return toast('Select something first (S)'); selCopy(); selDelete(); }
+function selPaste() {
+  if (!clip) return toast('Nothing copied yet');
+  commitFloat();
+  if (!S.layers[cl].visible) return toast('This layer is hidden — show it to paste');
+  if (tool !== 'select') selectTool('select');
+  const x = Math.max(0, Math.min(S.w - 1, clip.x)), y = Math.max(0, Math.min(S.h - 1, clip.y));
+  flt = { x, y, w: clip.w, h: clip.h, px: clip.px.slice(), before: cell().slice(), a: ca, f: cf, l: cl };
+  sel = { x, y, w: clip.w, h: clip.h };
+  requestRender();
+}
+function selFlip(dir) {
+  if (!sel) return false;
+  lift();
+  const { w, h } = flt, src = flt.px.slice();
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++)
+    flt.px[y * w + x] = dir === 'h' ? src[y * w + (w - 1 - x)] : src[(h - 1 - y) * w + x];
+  requestRender(); return true;
+}
+function selRotate() {
+  if (!sel) return false;
+  lift();
+  const { w, h } = flt, src = flt.px.slice(), n = new Uint32Array(w * h);
+  for (let y = 0; y < w; y++) for (let x = 0; x < h; x++) n[y * h + x] = src[(h - 1 - x) * w + y]; // clockwise
+  const cx = flt.x + w / 2, cy = flt.y + h / 2;
+  flt.px = n; flt.w = h; flt.h = w; flt.x = Math.round(cx - h / 2); flt.y = Math.round(cy - w / 2);
+  sel = { x: flt.x, y: flt.y, w: flt.w, h: flt.h };
+  requestRender(); return true;
+}
+function selNudge(dx, dy) { if (!sel) return; lift(); flt.x += dx; flt.y += dy; sel = { x: flt.x, y: flt.y, w: flt.w, h: flt.h }; requestRender(); }
+document.querySelectorAll('[data-sel]').forEach(b => b.onclick = () => {
+  const a = b.dataset.sel;
+  if (a === 'copy') selCopy(); if (a === 'cut') selCut(); if (a === 'paste') selPaste();
+  if (a === 'delete') selDelete(); if (a === 'done') deselect();
+  if (a === 'flipH' && !selFlip('h')) toast('Select something first'); if (a === 'flipV' && !selFlip('v')) toast('Select something first');
+});
+
+
+// ---------- hit areas (boxes per frame) and the origin point ----------
+const BOXCOL = { body: '#41a6f6', attack: '#ff5d6c' };
+const curBoxes = () => { const f = FR()[cf]; if (!f.boxes) f.boxes = []; return f.boxes; };
+function drawBoxes() {
+  const bx = FR()[cf].boxes || [];
+  bx.forEach((b, i) => {
+    const x = b.x * zoom, y = b.y * zoom, w = b.w * zoom, h = b.h * zoom, col = BOXCOL[b.kind] || '#fff';
+    vctx.fillStyle = col + '33'; vctx.fillRect(x, y, w, h);
+    vctx.strokeStyle = col; vctx.lineWidth = i === selBox && tool === 'boxes' ? 3 : 2; vctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    if (tool === 'boxes') { vctx.fillStyle = col; vctx.fillRect(x + w - zoom, y + h - zoom, zoom, zoom); } // resize corner
+  });
+  const o = S.origin, cx = (o.x + .5) * zoom, cy = (o.y + .5) * zoom, r = Math.max(6, zoom * 1.2);
+  vctx.strokeStyle = '#000'; vctx.lineWidth = 4; vctx.beginPath(); vctx.moveTo(cx - r, cy); vctx.lineTo(cx + r, cy); vctx.moveTo(cx, cy - r); vctx.lineTo(cx, cy + r); vctx.stroke();
+  vctx.strokeStyle = '#ffcc33'; vctx.lineWidth = 2; vctx.stroke();
+}
+function boxAt(p, kind) {
+  // only boxes of the kind being edited can be grabbed, so an attack box can be drawn over a body box
+  const bx = curBoxes();
+  for (let i = bx.length - 1; i >= 0; i--) if (bx[i].kind === kind && inRect(bx[i], p)) return i;
+  return -1;
+}
+function boxDown(p) {
+  const before = snapshot();
+  if (boxKind === 'origin') {
+    S.origin = { x: Math.max(0, Math.min(S.w - 1, p.x)), y: Math.max(0, Math.min(S.h - 1, p.y)) };
+    drawing = { t: 'box', mode: 'origin', before }; requestRender(); return;
+  }
+  const i = boxAt(p, boxKind);
+  if (i >= 0) {
+    const b = curBoxes()[i]; selBox = i;
+    const corner = p.x === b.x + b.w - 1 && p.y === b.y + b.h - 1;
+    drawing = { t: 'box', mode: corner ? 'resize' : 'move', i, start: p, orig: { ...b }, before };
+  } else {
+    curBoxes().push({ kind: boxKind, x: p.x, y: p.y, w: 1, h: 1 });
+    selBox = curBoxes().length - 1;
+    drawing = { t: 'box', mode: 'new', i: selBox, start: p, before };
+  }
+  requestRender();
+}
+function boxDrag(d, p) {
+  if (d.mode === 'origin') { S.origin = { x: Math.max(0, Math.min(S.w - 1, p.x)), y: Math.max(0, Math.min(S.h - 1, p.y)) }; requestRender(); return; }
+  const b = curBoxes()[d.i]; if (!b) return;
+  const cx = v => Math.max(0, Math.min(S.w - 1, v)), cy = v => Math.max(0, Math.min(S.h - 1, v));
+  if (d.mode === 'new') {
+    const x0 = cx(Math.min(d.start.x, p.x)), x1 = cx(Math.max(d.start.x, p.x)), y0 = cy(Math.min(d.start.y, p.y)), y1 = cy(Math.max(d.start.y, p.y));
+    Object.assign(b, { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 });
+  } else if (d.mode === 'move') {
+    b.x = Math.max(0, Math.min(S.w - b.w, d.orig.x + p.x - d.start.x));
+    b.y = Math.max(0, Math.min(S.h - b.h, d.orig.y + p.y - d.start.y));
+  } else {
+    b.w = Math.max(1, cx(p.x) - b.x + 1); b.h = Math.max(1, cy(p.y) - b.y + 1);
+  }
+  requestRender();
+}
+function boxUp(d) {
+  const after = snapshot();
+  if (JSON.stringify([d.before.origin, d.before.anims[ca].frames[cf].boxes]) !== JSON.stringify([after.origin, after.anims[ca].frames[cf].boxes]))
+    pushHist({ t: 'st', before: d.before, after });
+}
+function boxEdit(fn) { struct(() => fn()); }
+$('#bCopy').onclick = () => {
+  if (cf === 0) return toast('This is the first frame — nothing before it');
+  boxEdit(() => { FR()[cf].boxes = copyBoxes(FR()[cf - 1]); selBox = -1; });
+};
+$('#bClear').onclick = () => boxEdit(() => { FR()[cf].boxes = []; selBox = -1; });
+document.querySelectorAll('input[name=bk]').forEach(r => r.onchange = () => { boxKind = r.value; });
+function deleteBox() {
+  if (selBox < 0 || !curBoxes()[selBox]) return false;
+  const i = selBox; boxEdit(() => { curBoxes().splice(i, 1); }); selBox = -1; return true;
+}
+
+// ---------- pointer ----------
+let panning = null, spaceDown = false;
+function ptOf(e) {
+  const r = view.getBoundingClientRect();
+  return { x: Math.floor((e.clientX - r.left) / r.width * S.w), y: Math.floor((e.clientY - r.top) / r.height * S.h) };
+}
+function pick(p) {
+  if (p.x < 0 || p.y < 0 || p.x >= S.w || p.y >= S.h) return;
+  const v = composite(FR()[cf], new Uint32Array(S.w * S.h))[p.y * S.w + p.x];
+  if (!v) { toast('Nothing to pick there'); return; }
+  setColor(u32ToHex(v));
+}
+const startPan = e => { panning = { x: e.clientX, y: e.clientY, px: panX, py: panY }; stage.setPointerCapture(e.pointerId); };
+stage.addEventListener('pointerdown', e => {
+  // clicking the canvas takes focus away from text boxes, so shortcuts work again
+  if (document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) document.activeElement.blur();
+  if (e.target.closest('#zoomBox,#selBar')) return;
+  if (e.button === 1 || spaceDown) { startPan(e); e.preventDefault(); return; }
+  if (e.target !== view) {
+    if (tool === 'select' && e.button === 0 && !e.target.closest('button')) { deselect(); }
+    if (e.button === 0) startPan(e);
+    return;
+  }
+  e.preventDefault();
+  const p = ptOf(e);
+  let t = e.button === 2 && tool !== 'shade' ? 'eraser' : tool;
+  if (e.altKey && t !== 'eraser') t = 'picker';
+  if (t === 'picker') { pick(p); if (tool === 'picker') selectTool(prevTool); return; }
+  if (t === 'select') {
+    view.setPointerCapture(e.pointerId);
+    if (flt && inRect(flt, p)) { drawing = { t: 'selmove', start: p, ox: flt.x, oy: flt.y }; return; }
+    if (sel && inRect(sel, p) && !flt) {
+      if (!S.layers[cl].visible) { toast('This layer is hidden — show it to move pixels'); return; }
+      lift(); drawing = { t: 'selmove', start: p, ox: flt.x, oy: flt.y }; return;
+    }
+    commitFloat();
+    drawing = { t: 'selnew', start: p };
+    sel = clampRect({ x: p.x, y: p.y, w: 1, h: 1 }); requestRender();
+    return;
+  }
+  commitFloat();
+  if (t === 'boxes') { view.setPointerCapture(e.pointerId); boxDown(p); return; }
+  if (!S.layers[cl].visible) { toast('This layer is hidden — show it to draw'); return; }
+  const c = cell();
+  const v = t === 'eraser' ? 0 : hexToU32(color);
+  if (t === 'fill') {
+    const before = c.slice();
+    if (floodFill(c, p.x, p.y, v, e.shiftKey)) { pushPx(before); requestRender(); }
+    return;
+  }
+  paintDither = dither && ['pencil', 'eraser', 'line', 'rect', 'ellipse'].includes(t);
+  drawing = { t, v, before: c.slice(), start: p, last: p, dir: e.button === 2 ? 1 : -1, done: new Uint8Array(c.length) };
+  view.setPointerCapture(e.pointerId);
+  applyStroke(p, e.shiftKey);
+});
+stage.addEventListener('pointermove', e => {
+  if (panning) { panX = panning.px + e.clientX - panning.x; panY = panning.py + e.clientY - panning.y; placeView(); return; }
+  const p = ptOf(e);
+  const inside = p.x >= 0 && p.y >= 0 && p.x < S.w && p.y < S.h;
+  $('#coords').textContent = inside ? `x ${p.x}, y ${p.y}` : `${S.w}×${S.h}`;
+  if (drawing) {
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const ev of (evs.length ? evs : [e])) applyStroke(ptOf(ev), e.shiftKey);
+    return;
+  }
+  if (tool === 'select') view.style.cursor = (flt && inRect(flt, p)) || (sel && inRect(sel, p)) ? 'move' : 'crosshair';
+  else view.style.cursor = '';
+  const nh = inside ? p : null;
+  if ((nh && (!hover || nh.x !== hover.x || nh.y !== hover.y)) || (!nh && hover)) { hover = nh; requestRender(); }
+});
+function endPointer() {
+  if (panning) { panning = null; return; }
+  if (!drawing) return;
+  const d = drawing; drawing = null; paintDither = false;
+  if (d.t === 'box') { boxUp(d); requestRender(); return; }
+  if (d.t === 'selnew') {
+    if (sel && sel.w === 1 && sel.h === 1 && !d.moved) sel = null; // a plain click clears the selection
+  } else if (d.t !== 'selmove') pushPx(d.before);
+  requestRender();
+}
+stage.addEventListener('pointerup', endPointer);
+stage.addEventListener('pointercancel', endPointer);
+stage.addEventListener('pointerleave', () => { if (hover) { hover = null; requestRender(); } });
+stage.addEventListener('contextmenu', e => e.preventDefault());
+function applyStroke(p, shift) {
+  const d = drawing;
+  if (d.t === 'selnew') {
+    const x0 = Math.min(d.start.x, p.x), y0 = Math.min(d.start.y, p.y);
+    if (p.x !== d.start.x || p.y !== d.start.y) d.moved = true;
+    sel = clampRect({ x: x0, y: y0, w: Math.abs(p.x - d.start.x) + 1, h: Math.abs(p.y - d.start.y) + 1 });
+    requestRender(); return;
+  }
+  if (d.t === 'box') { boxDrag(d, p); return; }
+  if (d.t === 'selmove') {
+    flt.x = d.ox + p.x - d.start.x; flt.y = d.oy + p.y - d.start.y;
+    sel = { x: flt.x, y: flt.y, w: flt.w, h: flt.h };
+    requestRender(); return;
+  }
+  const c = cell();
+  switch (d.t) {
+    case 'pencil': case 'eraser':
+      bline(d.last.x, d.last.y, p.x, p.y, (x, y) => plot(c, x, y, d.v)); d.last = p; break;
+    case 'shade': {
+      const o = Math.floor((brush - 1) / 2);
+      const hit = (x, y) => {
+        if (x < 0 || y < 0 || x >= S.w || y >= S.h) return;
+        const i = y * S.w + x; if (d.done[i] || !d.before[i]) return;
+        d.done[i] = 1; c[i] = shadeColor(d.before[i], d.dir);   // each pixel shaded once per stroke
+      };
+      bline(d.last.x, d.last.y, p.x, p.y, (x, y) => {
+        for (let j = 0; j < brush; j++) for (let i = 0; i < brush; i++) {
+          const px = x - o + i, py = y - o + j; hit(px, py);
+          if (mirX) hit(S.w - 1 - px, py); if (mirY) hit(px, S.h - 1 - py); if (mirX && mirY) hit(S.w - 1 - px, S.h - 1 - py);
+        }
+      });
+      d.last = p; break;
+    }
+    case 'line': {
+      c.set(d.before);
+      let q = p;
+      if (shift) {
+        const dx = p.x - d.start.x, dy = p.y - d.start.y, ax = Math.abs(dx), ay = Math.abs(dy);
+        if (ax > 2 * ay) q = { x: p.x, y: d.start.y };
+        else if (ay > 2 * ax) q = { x: d.start.x, y: p.y };
+        else { const m = Math.max(ax, ay); q = { x: d.start.x + Math.sign(dx) * m, y: d.start.y + Math.sign(dy) * m }; }
+      }
+      bline(d.start.x, d.start.y, q.x, q.y, (x, y) => plot(c, x, y, d.v)); break;
+    }
+    case 'rect': c.set(d.before); drawRect(c, d.start, p, d.v, shift); break;
+    case 'ellipse': c.set(d.before); drawEllipse(c, d.start, p, d.v, shift); break;
+    case 'move': {
+      const dx = p.x - d.start.x, dy = p.y - d.start.y; c.fill(0);
+      for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++) {
+        let sx = x - dx, sy = y - dy;
+        if (tileMode) { sx = ((sx % S.w) + S.w) % S.w; sy = ((sy % S.h) + S.h) % S.h; }
+        if (sx >= 0 && sy >= 0 && sx < S.w && sy < S.h) c[y * S.w + x] = d.before[sy * S.w + sx];
+      }
+      break;
+    }
+  }
+  requestRender();
+}
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = stage.getBoundingClientRect();
+  zoomTo(nextZoom(e.deltaY < 0 ? 1 : -1), e.clientX - r.left, e.clientY - r.top);
+}, { passive: false });
+
+// ---------- zoom ----------
+const ZOOMS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 64];
+function nextZoom(dir) {
+  if (dir > 0) return ZOOMS.find(z => z > zoom) || zoom;
+  return [...ZOOMS].reverse().find(z => z < zoom) || zoom;
+}
+function zoomTo(nz, mx, my) {
+  if (nz === zoom) return;
+  if (mx === undefined) { mx = stage.clientWidth / 2; my = stage.clientHeight / 2; }
+  const left = (stage.clientWidth - S.w * zoom) / 2 + panX, top = (stage.clientHeight - S.h * zoom) / 2 + panY;
+  const px = (mx - left) / zoom, py = (my - top) / zoom;
+  zoom = nz;
+  panX = mx - px * nz - (stage.clientWidth - S.w * nz) / 2;
+  panY = my - py * nz - (stage.clientHeight - S.h * nz) / 2;
+  requestRender();
+}
+function fit() {
+  const k = tileMode ? 1.6 : 1;
+  const z = Math.min((stage.clientWidth - 40) / (S.w * k), (stage.clientHeight - 40) / (S.h * k));
+  zoom = [...ZOOMS].reverse().find(x => x <= z) || 1; panX = panY = 0; requestRender();
+}
+$('#zIn').onclick = () => zoomTo(nextZoom(1));
+$('#zOut').onclick = () => zoomTo(nextZoom(-1));
+$('#zFit').onclick = fit;
+window.addEventListener('resize', () => { placeView(); drawPreview(cf); });
+
+// ---------- tools & options ----------
+function selectTool(t) {
+  if (t !== 'select') commitFloat();
+  if (t !== 'picker') prevTool = t; else if (tool !== 'picker') prevTool = tool;
+  tool = t;
+  $('#boxOpts').style.display = t === 'boxes' ? '' : 'none';
+  if (t !== 'boxes') selBox = -1;
+  document.querySelectorAll('.tool[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  requestRender();
+}
+document.querySelectorAll('.tool[data-tool]').forEach(b => b.onclick = () => selectTool(b.dataset.tool));
+$('#btnUndo').onclick = undo; $('#btnRedo').onclick = redo;
+$('#brushIn').oninput = e => { brush = Math.max(1, Math.min(8, +e.target.value || 1)); };
+$('#mirX').onchange = e => mirX = e.target.checked;
+$('#mirY').onchange = e => mirY = e.target.checked;
+$('#gridChk').onchange = e => { showGrid = e.target.checked; requestRender(); };
+$('#onionChk').onchange = e => { onion = e.target.checked; requestRender(); };
+const setTile = on => { tileMode = on; $('#tileChk').checked = on; fit(); if (on) toast('Tile mode: the Move tool now wraps around the edges'); };
+$('#tileChk').onchange = e => setTile(e.target.checked);
+const setDither = on => { dither = on; $('#ditherChk').checked = on; };
+$('#ditherChk').onchange = e => setDither(e.target.checked);
+$('#snapChk').onchange = e => { shadeSnap = e.target.checked; };
+$('#boxesChk').onchange = e => { showBoxes = e.target.checked; requestRender(); };
+$('#colorPick').oninput = e => setColor(e.target.value);
+$('#hexIn').onchange = e => { let v = e.target.value.trim(); if (!v.startsWith('#')) v = '#' + v; if (/^#[0-9a-f]{6}$/i.test(v)) setColor(v); else e.target.value = color; };
+$('#addSwatch').onclick = () => { if (!S.palette.some(h => h.toUpperCase() === color)) { S.palette.push(color); markDirty(); buildPalette(); } };
+const presetSel = $('#presetSel');
+presetSel.append(el('option', { value: '', textContent: 'Load a palette preset…' }));
+Object.keys(PRESETS).forEach(k => presetSel.append(el('option', { value: k, textContent: k })));
+presetSel.onchange = () => { if (presetSel.value) { S.palette = presetList(presetSel.value); markDirty(); buildPalette(); } presetSel.value = ''; };
+$('#fpsIn').onchange = e => { A().fps = Math.max(1, Math.min(60, +e.target.value || 8)); e.target.value = A().fps; markDirty(); drawPreview(cf); };
+$('#loopChk').onchange = e => { A().loop = e.target.checked; markDirty(); drawPreview(cf); };
+$('#playBtn').onclick = () => setPlaying(!playing);
+$('#projName').onchange = e => { S.name = e.target.value.trim() || 'Untitled sprite'; e.target.value = S.name; markDirty(); };
+
+// animations
+function uniqueName(base) { let n = base, i = 2; while (S.anims.some(a => a.name === n)) n = base + ' ' + i++; return n; }
+$('#aAdd').onclick = () => {
+  struct(() => {
+    const src = FR()[cf];
+    S.anims.push({ name: uniqueName(S.anims.length === 1 ? 'walk' : 'animation'), fps: A().fps, loop: true, frames: [{ id: rid(), cells: src.cells.map(c => c.slice()), boxes: copyBoxes(src) }] });
+    ca = S.anims.length - 1; cf = 0;
+  });
+  toast('New animation, started from a copy of the frame you were on');
+  renameAnim(ca);
+};
+$('#aRename').onclick = () => renameAnim(ca);
+$('#aDel').onclick = () => {
+  if (S.anims.length < 2) return toast('A sprite needs at least one animation');
+  confirmDialog('Delete “' + A().name + '”?', `This removes the animation and its ${FR().length} frame${FR().length === 1 ? '' : 's'}. You can undo it.`, 'Delete animation',
+    () => struct(() => { S.anims.splice(ca, 1); ca = Math.max(0, ca - 1); cf = 0; }));
+};
+
+// layers (every frame of every animation has one cell per layer)
+const eachFrame = fn => S.anims.forEach(a => a.frames.forEach(fn));
+$('#lAdd').onclick = () => struct(() => { S.layers.splice(cl + 1, 0, { name: 'Layer ' + (S.layers.length + 1), visible: true }); eachFrame(f => f.cells.splice(cl + 1, 0, new Uint32Array(S.w * S.h))); cl++; });
+$('#lDup').onclick = () => struct(() => { S.layers.splice(cl + 1, 0, { name: S.layers[cl].name + ' copy', visible: true }); eachFrame(f => f.cells.splice(cl + 1, 0, f.cells[cl].slice())); cl++; });
+$('#lDel').onclick = () => { if (S.layers.length < 2) return toast('A sprite needs at least one layer'); struct(() => { S.layers.splice(cl, 1); eachFrame(f => f.cells.splice(cl, 1)); cl = Math.max(0, cl - 1); }); };
+const swapLayer = (a, b) => { [S.layers[a], S.layers[b]] = [S.layers[b], S.layers[a]]; eachFrame(f => { [f.cells[a], f.cells[b]] = [f.cells[b], f.cells[a]]; }); };
+$('#lUp').onclick = () => { if (cl < S.layers.length - 1) struct(() => { swapLayer(cl, cl + 1); cl++; }); };
+$('#lDown').onclick = () => { if (cl > 0) struct(() => { swapLayer(cl, cl - 1); cl--; }); };
+$('#lMerge').onclick = () => { if (cl === 0) return toast('Nothing below to merge into'); struct(() => { eachFrame(f => { const top = f.cells[cl], bot = f.cells[cl - 1]; for (let i = 0; i < top.length; i++) if (top[i]) bot[i] = top[i]; f.cells.splice(cl, 1); }); S.layers.splice(cl, 1); cl--; }); };
+
+// frames
+$('#fAdd').onclick = () => struct(() => { FR().splice(cf + 1, 0, blankFrame(S.w, S.h, S.layers.length)); cf++; });
+$('#fDup').onclick = () => struct(() => { FR().splice(cf + 1, 0, { id: rid(), cells: FR()[cf].cells.map(c => c.slice()), boxes: copyBoxes(FR()[cf]) }); cf++; });
+$('#fDel').onclick = () => { if (FR().length < 2) return toast('An animation needs at least one frame'); struct(() => { FR().splice(cf, 1); cf = Math.min(cf, FR().length - 1); }); };
+$('#fLeft').onclick = () => { if (cf > 0) struct(() => { const F = FR(); [F[cf - 1], F[cf]] = [F[cf], F[cf - 1]]; cf--; }); };
+$('#fRight').onclick = () => { if (cf < FR().length - 1) struct(() => { const F = FR(); [F[cf + 1], F[cf]] = [F[cf], F[cf + 1]]; cf++; }); };
+
+// canvas menu (acts on the selection when there is one)
+const cdrop = $('#canvasDrop');
+$('#btnCanvas').onclick = e => {
+  e.stopPropagation();
+  const r = e.currentTarget.getBoundingClientRect();
+  cdrop.style.left = r.left + 'px'; cdrop.style.top = (r.bottom + 4) + 'px';
+  cdrop.querySelector('[data-act=flipH]').textContent = sel ? 'Flip selection horizontally' : 'Flip layer horizontally';
+  cdrop.querySelector('[data-act=flipV]').textContent = sel ? 'Flip selection vertically' : 'Flip layer vertically';
+  cdrop.querySelector('[data-act=rotate]').textContent = sel ? 'Rotate selection 90°' : 'Rotate layer 90° (square only)';
+  cdrop.classList.toggle('open');
+};
+document.addEventListener('click', () => cdrop.classList.remove('open'));
+cdrop.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+  cdrop.classList.remove('open');
+  const a = b.dataset.act;
+  if (a === 'resize') return resizeDialog();
+  if (a === 'import') return $('#fileImg').click();
+  if (a === 'help') return helpDialog();
+  if (a === 'swap') return swapDialog();
+  if (sel && a === 'flipH') return selFlip('h');
+  if (sel && a === 'flipV') return selFlip('v');
+  if (sel && a === 'rotate') return selRotate();
+  struct(() => {
+    const c = cell(), src = c.slice(), W = S.w, H = S.h;
+    if (a === 'clear') c.fill(0);
+    if (a === 'flipH') for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) c[y * W + x] = src[y * W + (W - 1 - x)];
+    if (a === 'flipV') for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) c[y * W + x] = src[(H - 1 - y) * W + x];
+    if (a === 'rotate') { if (W !== H) { toast('Rotate needs a square canvas, or select a part first'); return false; } for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) c[y * W + x] = src[(W - 1 - x) * W + y]; }
+  });
+});
+
+// ---------- keyboard ----------
+const KEYS = { b: 'pencil', e: 'eraser', g: 'fill', i: 'picker', h: 'shade', l: 'line', r: 'rect', o: 'ellipse', m: 'move', s: 'select', k: 'boxes' };
+document.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+  if ($('#modal').classList.contains('open')) { if (e.key === 'Escape') closeModal(); return; }
+  const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+  if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (mod && k === 'y') { e.preventDefault(); redo(); return; }
+  if (mod && k === 's') { e.preventDefault(); save(); return; }
+  if (mod && k === 'c') { e.preventDefault(); selCopy(); return; }
+  if (mod && k === 'x') { e.preventDefault(); selCut(); return; }
+  if (mod && k === 'v') { e.preventDefault(); selPaste(); return; }
+  if (mod && k === 'a') { e.preventDefault(); commitFloat(); selectTool('select'); sel = { x: 0, y: 0, w: S.w, h: S.h }; requestRender(); return; }
+  if (mod && k === 'd') { e.preventDefault(); deselect(); return; }
+  if (mod) return;
+  if (e.code === 'Space') { spaceDown = true; stage.classList.add('panning'); e.preventDefault(); return; }
+  if (tool === 'boxes' && (k === 'delete' || k === 'backspace')) { e.preventDefault(); deleteBox(); return; }
+  if (sel && (k === 'delete' || k === 'backspace')) { e.preventDefault(); selDelete(); return; }
+  if (sel && (k === 'escape' || k === 'enter')) { deselect(); return; }
+  if (sel && k.startsWith('arrow')) {
+    e.preventDefault(); const n = e.shiftKey ? 8 : 1;
+    selNudge(k === 'arrowleft' ? -n : k === 'arrowright' ? n : 0, k === 'arrowup' ? -n : k === 'arrowdown' ? n : 0); return;
+  }
+  if (KEYS[k]) return selectTool(KEYS[k]);
+  if (k === '[') { brush = Math.max(1, brush - 1); $('#brushIn').value = brush; requestRender(); }
+  if (k === ']') { brush = Math.min(8, brush + 1); $('#brushIn').value = brush; requestRender(); }
+  if (k === '+' || k === '=') zoomTo(nextZoom(1));
+  if (k === '-') zoomTo(nextZoom(-1));
+  if (k === '0') fit();
+  if (k === ',') goFrame((cf - 1 + FR().length) % FR().length);
+  if (k === '.') goFrame((cf + 1) % FR().length);
+  if (k === 'enter') setPlaying(!playing);
+  if (k === 'x') { mirX = !mirX; $('#mirX').checked = mirX; }
+  if (k === 't') setTile(!tileMode);
+  if (k === 'd') setDither(!dither);
+});
+document.addEventListener('keyup', e => { if (e.code === 'Space') { spaceDown = false; stage.classList.remove('panning'); } });
+
+// ---------- modal / toast ----------
+const modal = $('#modal'), dlg = $('#dlg');
+let onModalClose = null;
+function openModal(title, body, actions = [], wide = false) {
+  if (onModalClose) { const f = onModalClose; onModalClose = null; f(); }
+  dlg.textContent = ''; dlg.className = 'dlg' + (wide ? ' wide' : '');
+  dlg.append(el('h2', { textContent: title }));
+  [].concat(body).forEach(b => dlg.append(typeof b === 'string' ? el('p', { textContent: b }) : b));
+  if (actions.length) dlg.append(el('div', { className: 'actions' }, actions));
+  modal.classList.add('open');
+}
+function closeModal() { modal.classList.remove('open'); if (onModalClose) { const f = onModalClose; onModalClose = null; f(); } }
+modal.addEventListener('pointerdown', e => { if (e.target === modal) closeModal(); });
+const btn = (text, fn, cls = '') => { const b = el('button', { textContent: text, className: cls }); b.onclick = fn; return b; };
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400); }
+
+// ---------- dialogs ----------
+function newDialog() {
+  const sizes = [8, 16, 24, 32, 48, 64, 96, 128];
+  const w = el('input', { type: 'number', value: 32, min: 1, max: 256 }), h = el('input', { type: 'number', value: 32, min: 1, max: 256 });
+  const grid = el('div', { className: 'grid' }, sizes.map(s => btn(`${s}×${s}`, () => { w.value = s; h.value = s; })));
+  const create = () => {
+    const W = Math.max(1, Math.min(256, +w.value | 0)), H = Math.max(1, Math.min(256, +h.value | 0));
+    const go = () => { loadProject(newProject(W, H)); setStatus('New sprite'); saveLocal(); closeModal(); };
+    if (dirty) confirmDialog('Start a new sprite?', 'You have unsaved changes in this sprite. They will be lost unless you save first.', 'Discard and start new', go);
+    else go();
+  };
+  openModal('New sprite', [
+    'Pick a size. 16×16 and 32×32 are the most common for game characters and tiles.', grid,
+    el('div', { className: 'row' }, [el('label', {}, ['Width ', w]), el('label', {}, ['Height ', h])])
+  ], [btn('Cancel', closeModal), btn('Create', create, 'primary')]);
+}
+function confirmDialog(title, text, okText, fn) {
+  openModal(title, [text], [btn('Cancel', closeModal), btn(okText, () => { closeModal(); fn(); }, 'primary')]);
+}
+function resizeDialog() {
+  const w = el('input', { type: 'number', value: S.w, min: 1, max: 256 }), h = el('input', { type: 'number', value: S.h, min: 1, max: 256 });
+  const anchor = el('select', {}, [el('option', { value: 'c', textContent: 'Keep art centred' }), el('option', { value: 'tl', textContent: 'Keep art top-left' })]);
+  openModal('Resize canvas', [
+    'Changes the canvas size of every frame without scaling the art. Shrinking crops the edges.',
+    el('div', { className: 'row' }, [el('label', {}, ['Width ', w]), el('label', {}, ['Height ', h]), anchor])
+  ], [btn('Cancel', closeModal), btn('Resize', () => {
+    const W = Math.max(1, Math.min(256, +w.value | 0)), H = Math.max(1, Math.min(256, +h.value | 0));
+    closeModal(); if (W === S.w && H === S.h) return;
+    struct(() => resizeTo(W, H, anchor.value));
+    fit();
+  }, 'primary')]);
+}
+function resizeTo(W, H, anchor = 'tl') {
+  sel = null;
+  const ox = anchor === 'c' ? Math.floor((W - S.w) / 2) : 0, oy = anchor === 'c' ? Math.floor((H - S.h) / 2) : 0;
+  eachFrame(f => { f.cells = f.cells.map(c => {
+    const n = new Uint32Array(W * H);
+    for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++) { const nx = x + ox, ny = y + oy; if (nx >= 0 && ny >= 0 && nx < W && ny < H) n[ny * W + nx] = c[y * S.w + x]; }
+    return n; });
+    f.boxes = (f.boxes || []).map(b => clampRectTo({ ...b, x: b.x + ox, y: b.y + oy }, W, H)).filter(Boolean); });
+  S.origin = { x: Math.max(0, Math.min(W - 1, S.origin.x + ox)), y: Math.max(0, Math.min(H - 1, S.origin.y + oy)) };
+  S.w = W; S.h = H;
+}
+function helpDialog() {
+  const rows = [['B','Pencil'],['E','Eraser (or right-click)'],['G','Fill · Shift = replace colour everywhere'],['I','Colour picker (or Alt-click)'],['H','Shade · click darkens, right-click lightens'],['D','Dither pattern on / off'],['K','Hit areas · Delete removes the selected box'],['L','Line · Shift = snap'],['R','Rectangle · Shift = filled'],['O','Ellipse · Shift = filled'],
+    ['S','Select · drag inside the box to move it'],['Ctrl+C / X / V','Copy, cut, paste (works across frames and animations)'],['Ctrl+A / Ctrl+D','Select all / deselect'],['Arrows','Nudge the selection · Shift = 8px'],['Delete','Clear the selection'],['Enter / Esc','Drop the selection'],
+    ['M','Move layer'],['T','Tile mode · Move wraps around the edges'],['[ / ]','Brush size'],['X','Toggle mirror ↔'],['Space + drag','Pan (or middle mouse, or drag outside the canvas)'],['Wheel / + / −','Zoom · 0 = fit'],[', / .','Previous / next frame'],['Enter','Play / stop preview (when nothing is selected)'],['Ctrl+Z / Ctrl+Shift+Z','Undo / redo'],['Ctrl+S','Save']];
+  const tbl = el('div', {}, rows.map(([k, d]) => el('div', { className: 'row', style: 'margin:4px 0' }, [el('kbd', { textContent: k }), el('span', { textContent: d })])));
+  openModal('Shortcuts', [tbl], [btn('Close', closeModal, 'primary')]);
+}
+
+// ---------- serialise ----------
+function encodeCell(c, map, list) {
+  const out = []; let prevIdx = -1, run = 0;
+  const flush = () => { if (run) out.push(run > 1 ? prevIdx + 'x' + run : '' + prevIdx); };
+  for (let i = 0; i < c.length; i++) {
+    const v = c[i]; let idx = 0;
+    if (v) { idx = map.get(v); if (idx === undefined) { list.push(v); idx = list.length; map.set(v, idx); } }
+    if (idx === prevIdx) run++; else { flush(); prevIdx = idx; run = 1; }
+  }
+  flush(); return out.join(',');
+}
+function decodeCell(str, colors, n) {
+  const c = new Uint32Array(n); let i = 0;
+  if (str) for (const tok of str.split(',')) {
+    const [a, b] = tok.split('x'); const idx = +a, cnt = b ? +b : 1;
+    const v = idx ? (colors[idx - 1] >>> 0) : 0;
+    c.fill(v, i, Math.min(n, i + cnt)); i += cnt;
+  }
+  return c;
+}
+function serialize() {
+  commitFloat();
+  const map = new Map(), list = [];
+  const anims = S.anims.map(a => ({ name: a.name, fps: a.fps, loop: a.loop,
+    frames: a.frames.map(f => { const o = { id: f.id, cells: f.cells.map(c => encodeCell(c, map, list)) }; if (f.boxes && f.boxes.length) o.boxes = copyBoxes(f); return o; }) }));
+  return { app: 'sprite-studio', v: 2, id: S.id, name: S.name, w: S.w, h: S.h,
+    layers: S.layers.map(l => ({ name: l.name, visible: l.visible })), colors: list.map(u32ToHex), anims, palette: S.palette, origin: S.origin,
+    tilemap: { w: S.tilemap.w, h: S.tilemap.h, tiles: S.tilemap.tiles.slice(0, S.tilemap.w * S.tilemap.h) } };
+}
+function deserialize(d) {
+  if (!d || d.app !== 'sprite-studio' || !d.w || !d.h || !(Array.isArray(d.anims) || Array.isArray(d.frames))) throw new Error('Not a Sprite Studio project');
+  const colors = (d.colors || []).map(hexToU32), n = d.w * d.h, L = d.layers.length;
+  const okBox = b => b && (b.kind === 'body' || b.kind === 'attack') && [b.x, b.y, b.w, b.h].every(Number.isFinite);
+  const frame = f => ({ id: (f && typeof f.id === 'string') ? f.id : rid(), cells: Array.from({ length: L }, (_, i) => decodeCell((Array.isArray(f) ? f : f.cells)[i] || '', colors, n)),
+    boxes: (!Array.isArray(f) && Array.isArray(f.boxes) ? f.boxes.filter(okBox).map(b => clampRectTo({ kind: b.kind, x: b.x | 0, y: b.y | 0, w: b.w | 0, h: b.h | 0 }, d.w, d.h)).filter(Boolean) : []) });
+  const anims = Array.isArray(d.anims) && d.anims.length
+    ? d.anims.map((a, i) => ({ name: String(a.name || 'animation ' + (i + 1)).slice(0, 40), fps: Math.max(1, Math.min(60, +a.fps || 8)), loop: a.loop !== false, frames: (a.frames || []).map(frame) }))
+    : [{ name: 'idle', fps: d.fps || 8, loop: true, frames: d.frames.map(frame) }];   // version 1 files had one animation
+  anims.forEach(a => { if (!a.frames.length) a.frames.push(blankFrame(d.w, d.h, L)); });
+  const tm = d.tilemap && d.tilemap.w ? { w: Math.min(64, d.tilemap.w | 0), h: Math.min(64, d.tilemap.h | 0), tiles: Array.isArray(d.tilemap.tiles) ? d.tilemap.tiles.map(t => typeof t === 'string' ? t : null) : [] } : { w: 12, h: 8, tiles: [] };
+  return { id: d.id || 'p-' + rid(), name: d.name || 'Untitled sprite', w: d.w, h: d.h,
+    layers: d.layers.map(l => ({ name: String(l.name || 'Layer'), visible: l.visible !== false })), anims,
+    palette: Array.isArray(d.palette) && d.palette.length ? d.palette.filter(h => /^#[0-9a-f]{6}$/i.test(h)) : presetList('PICO-8'), tilemap: tm,
+    origin: d.origin && Number.isFinite(d.origin.x) ? { x: Math.max(0, Math.min(d.w - 1, d.origin.x | 0)), y: Math.max(0, Math.min(d.h - 1, d.origin.y | 0)) } : { x: Math.floor(d.w / 2), y: d.h - 1 } };
+}
+function loadProject(p) {
+  flt = null; sel = null;
+  S = p; ca = cf = cl = 0; undoStack.length = redoStack.length = 0; dirty = false;
+  setPlaying(false); refreshAll(); fit(); setStatus('Opened “' + S.name + '”');
+}
+
+// ---------- status / local autosave ----------
+function setStatus(t) { const s = $('#status'); s.textContent = t; s.classList.toggle('dirty', dirty); }
+let localT;
+function markDirty() { dirty = true; setStatus('Unsaved changes'); clearTimeout(localT); localT = setTimeout(saveLocal, 1200); }
+function saveLocal() { try { if (flt) return; localStorage.setItem('sprite-studio:current', JSON.stringify({ data: serialize(), dirty })); } catch (e) {} }
+function loadLocal() { try { const r = JSON.parse(localStorage.getItem('sprite-studio:current') || 'null'); if (r && r.data) { const p = deserialize(r.data); return { p, dirty: !!r.dirty }; } } catch (e) {} return null; }
+
+// ---------- platform capabilities (account saving + downloads on claude.ai) ----------
+let db = null, uid = null, downloads = null, saving = false;
+const inClaude = !!(window.claude && typeof window.claude.use === 'function');
+const userCol = () => db.collection('data/users/' + uid);
+(async () => {
+  try {
+    if (!inClaude) return;
+    const [d, u, dl] = await Promise.all([claude.use('db'), claude.use('user'), claude.use('downloads')]);
+    downloads = dl || null;
+    if (d && u) { const id = await u.id(); if (id) { db = d; uid = id; } }
+    if (db && !dirty) setStatus('Saving to your account');
+  } catch (e) {}
+})();
+
+function thumbURL() {
+  const s = Math.max(1, Math.floor(64 / Math.max(S.w, S.h)));
+  const c = el('canvas', { width: S.w * s, height: S.h * s }), x = c.getContext('2d');
+  octx.putImageData(frameImage(S.anims[0].frames[0]), 0, 0); x.imageSmoothingEnabled = false; x.drawImage(off, 0, 0, c.width, c.height);
+  return c.toDataURL('image/png');
+}
+
+// Two places a sprite can be saved: your Claude account (when this page runs on claude.ai)
+// or this browser (everywhere else). Both keep a small index with thumbnails for the Open list.
+const LIB = 'sprite-studio:library';
+const localStore = {
+  label: 'this browser',
+  read() { try { return JSON.parse(localStorage.getItem(LIB) || '{}') || {}; } catch (e) { return {}; } },
+  async index() { const all = this.read(), out = {}; for (const k in all) { const { payload, ...m } = all[k]; out[k] = m; } return out; },
+  async load(id) { const r = this.read()[id]; return r ? r.payload : null; },
+  async put(id, meta, payload) {
+    const all = this.read(); all[id] = { ...meta, payload };
+    try { localStorage.setItem(LIB, JSON.stringify(all)); } catch (e) { throw { code: 'quota_exceeded' }; }
+  },
+  async remove(id) { const all = this.read(); delete all[id]; try { localStorage.setItem(LIB, JSON.stringify(all)); } catch (e) {} }
+};
+const cloudStore = {
+  label: 'your account',
+  async index() { const s = await withRetry(() => userCol().doc('index').get()); return s.exists ? ((s.data() || {}).projects || {}) : {}; },
+  async load(id) { const d = await withRetry(() => userCol().doc(id).get()); return d.exists ? d.data().payload : null; },
+  async put(id, meta, payload) {
+    await withRetry(() => userCol().doc(id).set({ kind: 'project', name: meta.name, updated: meta.updated, payload }));
+    const projects = { ...(await this.index()) }; projects[id] = meta;
+    await withRetry(() => userCol().doc('index').set({ projects }));
+  },
+  async remove(id) {
+    await withRetry(() => userCol().doc(id).delete());
+    const projects = { ...(await this.index()) }; delete projects[id];
+    await withRetry(() => userCol().doc('index').set({ projects }));
+  }
+};
+const store = () => db ? cloudStore : localStore;
+const frameCount = () => S.anims.reduce((n, a) => n + a.frames.length, 0);
+
+async function save() {
+  if (saving) return;
+  const st = store(), payload = JSON.stringify(serialize());
+  if (st === cloudStore && payload.length > 240000) {
+    openModal('Too big for cloud save', ['This sprite is larger than a single cloud save can hold. Download it as a project file instead — you can open it again with Open → Import project file.'],
+      [btn('Close', closeModal), btn('Download project file', () => { closeModal(); exportProject(); }, 'primary')]);
+    return;
+  }
+  saving = true; setStatus('Saving…');
+  try {
+    const now = Date.now();
+    await st.put(S.id, { name: S.name, updated: now, w: S.w, h: S.h, frames: frameCount(), anims: S.anims.length, thumb: thumbURL() }, payload);
+    dirty = false; saveLocal();
+    setStatus('Saved to ' + st.label + ' ' + new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+  } catch (e) {
+    setStatus('Save failed');
+    if (e && e.code === 'quota_exceeded') {
+      openModal('Storage is full', [st === localStore
+        ? 'This browser has run out of room for saved sprites. Delete some old ones from Open, or download this one as a project file.'
+        : 'Your saved-sprite storage is full. Delete some old ones from Open, or download this one as a project file.'],
+        [btn('Close', closeModal), btn('Download project file', () => { closeModal(); exportProject(); }, 'primary')]);
+    } else toast('Couldn’t save — try again or download a project file');
+  } finally { saving = false; }
+}
+async function withRetry(fn) {
+  try { return await fn(); } catch (e) {
+    if (e && e.code === 'unavailable') { await new Promise(r => setTimeout(r, 400 + Math.random() * 600)); return fn(); }
+    throw e;
+  }
+}
+async function openDialog() {
+  const st = store();
+  const importBtn = btn('Import project file…', () => { closeModal(); $('#fileProj').click(); });
+  const list = el('div', { className: 'plist' }, [el('p', { textContent: 'Loading your sprites…' })]);
+  const where = st === localStore ? 'Sprites saved in this browser. Download a project file to move one to another device.' : 'Sprites saved to your account.';
+  openModal('Open a sprite', [where, list], [btn('Close', closeModal), importBtn]);
+  const timer = setTimeout(() => { list.textContent = ''; list.append(el('p', { textContent: 'Can’t reach your saved sprites right now. Try again in a moment.' })); }, 10000);
+  let projects;
+  try { projects = await st.index(); } catch (e) { clearTimeout(timer); list.textContent = ''; list.append(el('p', { textContent: 'Couldn’t load your saved sprites.' })); return; }
+  clearTimeout(timer);
+  const ids = Object.keys(projects).sort((a, b) => projects[b].updated - projects[a].updated);
+  list.textContent = '';
+  if (!ids.length) { list.append(el('p', { textContent: 'No saved sprites yet. Press Save to keep the one you’re working on.' })); return; }
+  for (const id of ids) {
+    const m = projects[id];
+    const img = el('img', { alt: '' }); if (typeof m.thumb === 'string' && m.thumb.startsWith('data:image/png')) img.src = m.thumb;
+    const del = btn('Delete', async ev => {
+      ev.stopPropagation();
+      if (del.dataset.armed !== '1') { del.dataset.armed = '1'; del.textContent = 'Sure?'; return; }
+      try { await st.remove(id); row.remove(); toast('Deleted'); } catch (e) { toast('Couldn’t delete — try again'); }
+    }, 'mini danger');
+    const an = m.anims > 1 ? ` · ${m.anims} animations` : '';
+    const meta = el('div', { className: 'meta' }, [el('div', { textContent: m.name || 'Untitled' }), el('small', { textContent: `${m.w}×${m.h} · ${m.frames || 1} frame${m.frames === 1 ? '' : 's'}${an} · ${new Date(m.updated).toLocaleString()}` })]);
+    const row = el('div', { className: 'pitem' }, [img, meta, del]);
+    row.onclick = () => {
+      const go = async () => {
+        try {
+          const payload = await st.load(id);
+          if (!payload) return toast('That sprite couldn’t be found');
+          loadProject(deserialize(JSON.parse(payload))); saveLocal(); closeModal();
+        } catch (e) { toast('Couldn’t open that sprite'); }
+      };
+      if (dirty && id !== S.id) confirmDialog('Open another sprite?', 'You have unsaved changes in this sprite. They will be lost unless you save first.', 'Discard and open', go);
+      else go();
+    };
+    list.append(row);
+  }
+}
+
+// ---------- files out ----------
+async function offerFile(filename, data) {
+  if (downloads) {
+    try { await downloads.save({ filename, data }); toast('Downloaded ' + filename); return; }
+    catch (e) {
+      if (e && e.code === 'declined') return;
+      if (e && e.code === 'rate_limited') { toast('A download prompt is already open'); return; }
+    }
+  }
+  if (!inClaude) {
+    const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data], { type: 'application/json' }));
+    const a = el('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000); return;
+  }
+  fallbackFile(filename, data);
+}
+function fallbackFile(filename, data) {
+  if (data instanceof Blob && data.type.startsWith('image/')) {
+    const url = URL.createObjectURL(data);
+    const img = el('img', { src: url, style: 'max-width:100%;image-rendering:pixelated;background:#0d0e11;border-radius:6px' });
+    openModal(filename, ['Downloads aren’t available in this view. Right-click (or long-press) the image and choose “Save image as…”.', img], [btn('Close', () => { URL.revokeObjectURL(url); closeModal(); }, 'primary')]);
+  } else if (typeof data === 'string') {
+    const ta = el('textarea', { readOnly: true, value: data });
+    openModal(filename, ['Downloads aren’t available in this view. Copy the text below and save it as ' + filename + '.', ta],
+      [btn('Copy', async () => { try { await navigator.clipboard.writeText(ta.value); toast('Copied'); } catch (e) { ta.select(); toast('Press Ctrl+C to copy'); } }), btn('Close', closeModal, 'primary')]);
+  } else {
+    openModal(filename, ['Downloads aren’t available in this view, so this file can’t be saved here. Open Sprite Studio in claude.ai or on adamdobrer.ca to download it.'], [btn('Close', closeModal, 'primary')]);
+  }
+}
+const slug = s => (s || '').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase();
+const safeName = () => slug(S.name) || 'sprite';
+const toBlob = c => new Promise(r => c.toBlob(r, 'image/png'));
+function frameCanvas(fr, scale) {
+  const c = el('canvas', { width: S.w * scale, height: S.h * scale }), x = c.getContext('2d');
+  octx.putImageData(frameImage(fr), 0, 0); x.imageSmoothingEnabled = false; x.drawImage(off, 0, 0, c.width, c.height);
+  return c;
+}
+// Sheet layouts: 'rows' = one row per animation, 'strip' = everything in one row, 'grid' = N columns
+function sheetPlan(layout, cols) {
+  const cells = []; let maxCol = 0, rows = 0;
+  if (layout === 'rows') {
+    S.anims.forEach((a, r) => a.frames.forEach((fr, i) => { cells.push({ a, fr, i, col: i, row: r }); maxCol = Math.max(maxCol, i + 1); }));
+    rows = S.anims.length;
+  } else {
+    const all = S.anims.flatMap(a => a.frames.map((fr, i) => ({ a, fr, i })));
+    const c = layout === 'grid' && cols > 0 ? Math.min(cols, all.length) : all.length;
+    all.forEach((o, k) => cells.push({ ...o, col: k % c, row: Math.floor(k / c) }));
+    maxCol = c; rows = Math.ceil(all.length / c);
+  }
+  return { cells, cols: maxCol, rows };
+}
+function sheetCanvas(plan, scale) {
+  const fw = S.w * scale, fh = S.h * scale;
+  const cv = el('canvas', { width: plan.cols * fw, height: plan.rows * fh }), x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
+  for (const c of plan.cells) { octx.putImageData(frameImage(c.fr), 0, 0); x.drawImage(off, c.col * fw, c.row * fh, fw, fh); }
+  return cv;
+}
+function sheetJSON(plan, scale, image) {
+  const fw = S.w * scale, fh = S.h * scale, animations = {};
+  for (const a of S.anims) animations[a.name] = { fps: a.fps, loop: a.loop, frames: [] };
+  for (const c of plan.cells) {
+    const fr = { x: c.col * fw, y: c.row * fh, w: fw, h: fh, durationMs: Math.round(1000 / c.a.fps) };
+    if (c.fr.boxes && c.fr.boxes.length) fr.boxes = c.fr.boxes.map(b => ({ kind: b.kind, x: b.x * scale, y: b.y * scale, w: b.w * scale, h: b.h * scale }));
+    animations[c.a.name].frames.push(fr);
+  }
+  // origin: the point (in frame pixels) that should sit on the ground; box x/y are in frame pixels too
+  return JSON.stringify({ image, frameWidth: fw, frameHeight: fh, columns: plan.cols, rows: plan.rows, origin: { x: S.origin.x * scale, y: S.origin.y * scale }, animations }, null, 2);
+}
+function exportProject() { offerFile(safeName() + '.sprite.json', JSON.stringify(serialize())); }
+
+// ---------- Godot 4 export: a zip with the sheet, a SpriteFrames resource and a readme ----------
+function godotTres(plan, image) {
+  const q = s => '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  const subs = [], anims = [];
+  plan.cells.forEach((c, k) => {
+    subs.push(`[sub_resource type="AtlasTexture" id="AtlasTexture_${k + 1}"]\natlas = ExtResource("1_sheet")\nregion = Rect2(${c.col * S.w}, ${c.row * S.h}, ${S.w}, ${S.h})\n`);
+    c.k = k + 1;
+  });
+  for (const a of S.anims) {
+    const frames = plan.cells.filter(c => c.a === a).map(c => `{\n"duration": 1.0,\n"texture": SubResource("AtlasTexture_${c.k}")\n}`);
+    anims.push(`{\n"frames": [${frames.join(', ')}],\n"loop": ${a.loop},\n"name": &${q(a.name)},\n"speed": ${a.fps.toFixed(1)}\n}`);
+  }
+  return `[gd_resource type="SpriteFrames" load_steps=${subs.length + 2} format=3]\n\n[ext_resource type="Texture2D" path=${q(image)} id="1_sheet"]\n\n${subs.join('\n')}\n[resource]\nanimations = [${anims.join(', ')}]\n`;
+}
+function godotScript(jsonName) {
+  return `extends AnimatedSprite2D
+## Made by Sprite Studio. Keeps the Body and Attack areas in step with the animation,
+## using the hit areas drawn for each frame. Boxes are measured from the origin point,
+## which sits at this node's position, and they flip with flip_h / flip_v.
+
+const BOXES_FILE := "${jsonName}"
+var _data: Dictionary = {}
+var _base_offset := Vector2.ZERO
+var _flip := Vector2i.ZERO
+
+func _ready() -> void:
+\tvar res = load(get_script().resource_path.get_base_dir().path_join(BOXES_FILE))
+\tif res is JSON and res.data is Dictionary:
+\t\t_data = res.data
+\tvar o: Dictionary = _data.get("origin", {"x": 0, "y": 0})
+\t_base_offset = Vector2(_data.get("frameWidth", 0) / 2.0 - o["x"], _data.get("frameHeight", 0) / 2.0 - o["y"] - 1)
+\tframe_changed.connect(_update_boxes)
+\tanimation_changed.connect(_update_boxes)
+\t_apply_flip()
+
+func _process(_delta: float) -> void:
+\tif Vector2i(int(flip_h), int(flip_v)) != _flip:
+\t\t_apply_flip()
+
+# Flipping mirrors the sprite around the origin point, so it turns on the spot.
+func _apply_flip() -> void:
+\t_flip = Vector2i(int(flip_h), int(flip_v))
+\toffset = Vector2(-_base_offset.x if flip_h else _base_offset.x, -_base_offset.y if flip_v else _base_offset.y)
+\t_update_boxes()
+
+## The boxes of one kind ("body" or "attack") on the current frame, relative to this node.
+func get_boxes(kind: String) -> Array[Rect2]:
+\tvar out: Array[Rect2] = []
+\tvar anim: Dictionary = _data.get("animations", {}).get(String(animation), {})
+\tvar frames: Array = anim.get("frames", [])
+\tif frame >= frames.size():
+\t\treturn out
+\tvar o: Dictionary = _data.get("origin", {"x": 0, "y": 0})
+\tfor b in frames[frame].get("boxes", []):
+\t\tif b["kind"] != kind:
+\t\t\tcontinue
+\t\tvar r := Rect2(b["x"] - o["x"], b["y"] - o["y"] - 1, b["w"], b["h"])
+\t\tif flip_h:
+\t\t\tr.position.x = -r.position.x - r.size.x
+\t\tif flip_v:
+\t\t\tr.position.y = -r.position.y - r.size.y
+\t\tout.append(r)
+\treturn out
+
+func _update_boxes() -> void:
+\tfor kind in ["body", "attack"]:
+\t\tvar area := get_node_or_null(kind.capitalize()) as Area2D
+\t\tif area == null:
+\t\t\tcontinue
+\t\tfor child in area.get_children():
+\t\t\tif child is CollisionShape2D:
+\t\t\t\tarea.remove_child(child)
+\t\t\t\tchild.queue_free()
+\t\tfor r in get_boxes(kind):
+\t\t\tvar shape := CollisionShape2D.new()
+\t\t\tvar rect := RectangleShape2D.new()
+\t\t\trect.size = r.size
+\t\t\tshape.shape = rect
+\t\t\tshape.position = r.position + r.size / 2.0
+\t\t\tarea.add_child(shape)
+`;
+}
+function godotScene(base, tres, script) {
+  const q = s => '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  const ox = S.w / 2 - S.origin.x, oy = S.h / 2 - S.origin.y - 1;   // the origin pixel's bottom-left corner sits on the node
+  const node = (S.name || 'Sprite').replace(/[^\w]+/g, '') || 'Sprite';
+  const first = S.anims[0].name;
+  return `[gd_scene load_steps=3 format=3]
+
+[ext_resource type="SpriteFrames" path=${q(tres)} id="1_frames"]
+[ext_resource type="Script" path=${q(script)} id="2_boxes"]
+
+[node name=${q(node)} type="AnimatedSprite2D"]
+texture_filter = 1
+sprite_frames = ExtResource("1_frames")
+animation = &${q(first)}
+autoplay = ${q(first)}
+offset = Vector2(${ox}, ${oy})
+script = ExtResource("2_boxes")
+
+[node name="Body" type="Area2D" parent="."]
+
+[node name="Attack" type="Area2D" parent="."]
+`;
+}
+async function exportGodot() {
+  const plan = sheetPlan('rows'), base = safeName(), image = base + '-sheet.png', json = base + '-boxes.json', tres = base + '.tres', script = base + '_boxes.gd', scene = base + '.tscn';
+  const png = new Uint8Array(await (await toBlob(sheetCanvas(plan, 1))).arrayBuffer());
+  const hasBoxes = allFrames().some(f => f.boxes && f.boxes.length);
+  const readme = `${S.name} — exported from Sprite Studio for Godot 4\n\n` +
+    `Unzip this folder anywhere inside your Godot project and keep the files together.\n\n` +
+    `Easiest: drag ${scene} into your level. It's an AnimatedSprite2D that plays "${first(S)}" on its own, with crisp pixels,\n` +
+    `and its position is the sprite's origin point (where its feet touch the ground).\n` +
+    `It has two Area2D children, Body and Attack, whose shapes follow the hit areas drawn on each frame${hasBoxes ? '' : ' (none were drawn for this sprite yet)'}.\n` +
+    `Connect their area_entered signals to react to hits.\n\n` +
+    `Or use just the animations: add an AnimatedSprite2D and drag ${tres} onto "Sprite Frames".\n\n` +
+    `Animations: ${S.anims.map(a => `${a.name} (${a.fps} fps${a.loop ? ', loops' : ', plays once'})`).join(', ')}.\n` +
+    `Play one from a script with $${'Sprite'}.play("${first(S)}") (use your node's name).\n` +
+    `Frames are ${S.w}x${S.h}px; each animation is one row of ${image}. ${json} lists every frame and its hit areas.\n`;
+  const enc = new TextEncoder();
+  const zipped = makeZip([
+    { name: `${base}/${image}`, data: png },
+    { name: `${base}/${tres}`, data: enc.encode(godotTres(plan, image)) },
+    { name: `${base}/${scene}`, data: enc.encode(godotScene(base, tres, script)) },
+    { name: `${base}/${script}`, data: enc.encode(godotScript(json)) },
+    { name: `${base}/${json}`, data: enc.encode(sheetJSON(plan, 1, image)) },
+    { name: `${base}/README.txt`, data: enc.encode(readme) }]);
+  offerFile(base + '-godot.zip', new Blob([zipped], { type: 'application/zip' }));
+}
+const first = p => p.anims[0].name;
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = d => { let c = 0xFFFFFFFF; for (let i = 0; i < d.length; i++) c = CRC[(c ^ d[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+function makeZip(files) {
+  // stored (uncompressed) zip: PNGs are already compressed and the rest is tiny
+  const parts = [], central = []; let offset = 0;
+  const u16 = n => [n & 255, (n >> 8) & 255], u32 = n => [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >>> 24) & 255];
+  const enc = new TextEncoder();
+  for (const f of files) {
+    const name = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+    const head = [...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(sz), ...u32(sz), ...u16(name.length), ...u16(0)];
+    parts.push(new Uint8Array(head), name, f.data);
+    central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(sz), ...u32(sz), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), name);
+    offset += head.length + name.length + sz;
+  }
+  const cdSize = central.reduce((n, p) => n + p.length, 0);
+  const end = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cdSize), ...u32(offset), ...u16(0)]);
+  const all = [...parts, ...central, end], out = new Uint8Array(all.reduce((n, p) => n + p.length, 0));
+  let o = 0; for (const p of all) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+// ---------- GIF encoder (current animation) ----------
+function encodeGIF(scale) {
+  const W = S.w * scale, H = S.h * scale;
+  const pal = new Map(); const colors = [0];
+  const framesIdx = [];
+  for (const fr of FR()) {
+    const src = composite(fr, new Uint32Array(S.w * S.h));
+    const idx = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = src[((y / scale) | 0) * S.w + ((x / scale) | 0)];
+      if (!v) continue;
+      const rgb = v & 0xffffff; let k = pal.get(rgb);
+      if (k === undefined) { if (colors.length >= 256) return null; k = colors.length; colors.push(rgb); pal.set(rgb, k); }
+      idx[y * W + x] = k;
+    }
+    framesIdx.push(idx);
+  }
+  let bits = 1; while ((1 << bits) < colors.length) bits++;
+  const tsize = 1 << bits, out = [];
+  const w16 = n => out.push(n & 255, (n >> 8) & 255);
+  'GIF89a'.split('').forEach(ch => out.push(ch.charCodeAt(0)));
+  w16(W); w16(H); out.push(0xF0 | (bits - 1), 0, 0);
+  for (let i = 0; i < tsize; i++) { const c = colors[i] || 0; out.push(c & 255, (c >> 8) & 255, (c >> 16) & 255); }
+  if (A().loop) out.push(0x21, 0xFF, 11, ...'NETSCAPE2.0'.split('').map(c => c.charCodeAt(0)), 3, 1, 0, 0, 0);
+  const delay = Math.max(2, Math.round(100 / A().fps));
+  const minCode = Math.max(2, bits);
+  for (const idx of framesIdx) {
+    out.push(0x21, 0xF9, 4, 0x09, delay & 255, delay >> 8, 0, 0);
+    out.push(0x2C); w16(0); w16(0); w16(W); w16(H); out.push(0);
+    out.push(minCode);
+    const data = lzw(idx, minCode);
+    for (let i = 0; i < data.length; i += 255) { const chunk = data.slice(i, i + 255); out.push(chunk.length, ...chunk); }
+    out.push(0);
+  }
+  out.push(0x3B);
+  return new Uint8Array(out);
+}
+function lzw(px, minCode) {
+  const clear = 1 << minCode, eoi = clear + 1;
+  let size = minCode + 1, next = eoi + 1, dict = new Map();
+  const bytes = []; let cur = 0, nb = 0;
+  const write = code => { cur |= code << nb; nb += size; while (nb >= 8) { bytes.push(cur & 255); cur >>>= 8; nb -= 8; } };
+  write(clear);
+  let prefix = px[0];
+  for (let i = 1; i < px.length; i++) {
+    const k = px[i], key = (prefix << 8) | k, hit = dict.get(key);
+    if (hit !== undefined) { prefix = hit; continue; }
+    write(prefix);
+    if (next < 4095) { dict.set(key, next++); if (next > (1 << size) && size < 12) size++; }
+    else { write(clear); dict = new Map(); next = eoi + 1; size = minCode + 1; }
+    prefix = k;
+  }
+  write(prefix); write(eoi);
+  if (nb > 0) bytes.push(cur & 255);
+  return bytes;
+}
+
+// ---------- export dialog ----------
+function exportDialog() {
+  commitFloat();
+  const scale = el('select', {}, [1, 2, 4, 8, 16].map(s => el('option', { value: s, textContent: s + '× (' + S.w * s + '×' + S.h * s + ')' })));
+  const layout = el('select', {}, [el('option', { value: 'rows', textContent: 'One row per animation' }), el('option', { value: 'strip', textContent: 'Everything in one row' }), el('option', { value: 'grid', textContent: 'Grid' })]);
+  const cols = el('input', { type: 'number', value: 8, min: 1, max: 256, title: 'Columns' });
+  const colsLabel = el('label', {}, ['Columns ', cols]); colsLabel.style.display = 'none';
+  layout.onchange = () => { colsLabel.style.display = layout.value === 'grid' ? '' : 'none'; };
+  const sc = () => +scale.value, plan = () => sheetPlan(layout.value, Math.max(1, +cols.value | 0));
+  const opt = (title, sub, fn) => { const b = el('button', {}, [title, el('small', { textContent: sub })]); b.onclick = fn; return b; };
+  openModal('Export', [
+    el('div', { className: 'row', style: 'gap:14px' }, [el('label', {}, ['Scale ', scale]), el('label', {}, ['Sheet ', layout]), colsLabel]),
+    el('p', { className: 'hint', textContent: 'Most game engines want 1× and scale the sprite themselves.' }),
+    el('div', { className: 'expgrid' }, [
+      opt('Godot 4', 'A ready scene: animations, origin and hit areas (zip)', () => exportGodot()),
+      opt('Sprite sheet', 'Every animation in one PNG', async () => offerFile(safeName() + '-sheet.png', await toBlob(sheetCanvas(plan(), sc())))),
+      opt('Sheet data', 'JSON: frames per animation, hit areas, origin', () => offerFile(safeName() + '-sheet.json', sheetJSON(plan(), sc(), safeName() + '-sheet.png'))),
+      opt('Current frame', 'PNG of the frame you’re on', async () => offerFile(`${safeName()}-${slug(A().name) || 'anim'}-${cf + 1}.png`, await toBlob(frameCanvas(FR()[cf], sc())))),
+      opt('Animated GIF', `“${A().name}”, for sharing`, () => { const g = encodeGIF(sc()); if (!g) return toast('GIF supports up to 255 colours'); offerFile(`${safeName()}-${slug(A().name) || 'anim'}.gif`, new Blob([g], { type: 'image/gif' })); }),
+      opt('Project file', 'Re-open later with layers and animations', () => exportProject()),
+    ])
+  ], [btn('Close', closeModal, 'primary')]);
+}
+
+
+// ---------- colour swap / variants ----------
+function swapDialog() {
+  commitFloat();
+  const scope = el('select', {}, [el('option', { value: 'all', textContent: 'Every animation' }), el('option', { value: 'anim', textContent: 'This animation' }), el('option', { value: 'frame', textContent: 'This frame' })]);
+  const layers = el('select', {}, [el('option', { value: 'all', textContent: 'All layers' }), el('option', { value: 'one', textContent: 'This layer' })]);
+  const list = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:10px' });
+  let rows = [];
+  const cellsIn = () => {
+    const frames = scope.value === 'all' ? allFrames() : scope.value === 'anim' ? FR() : [FR()[cf]];
+    return frames.flatMap(f => layers.value === 'all' ? f.cells : [f.cells[cl]]);
+  };
+  const build = () => {
+    const counts = new Map();
+    for (const c of cellsIn()) for (let i = 0; i < c.length; i++) if (c[i]) counts.set(c[i], (counts.get(c[i]) || 0) + 1);
+    const keep = new Map(rows.map(r => [r.from, r.input.value]));
+    list.textContent = ''; rows = [];
+    [...counts.entries()].sort((a, b) => lum(rgbOf(a[0])) - lum(rgbOf(b[0]))).forEach(([v, n]) => {
+      const hx = u32ToHex(v), input = el('input', { type: 'color', value: (keep.get(v) || hx).toLowerCase(), style: 'width:34px;height:26px;padding:0;border:1px solid var(--line);border-radius:4px;background:none' });
+      const sw = el('span', { title: hx, style: `width:26px;height:26px;border-radius:4px;background:${hx};border:1px solid rgba(255,255,255,.15);flex:none` });
+      list.append(el('div', { className: 'row', style: 'gap:6px;flex-wrap:nowrap' }, [sw, el('span', { textContent: '→' }), input, el('small', { textContent: n + ' px', style: 'color:var(--muted)' })]));
+      rows.push({ from: v, input });
+    });
+    if (!rows.length) list.append(el('p', { textContent: 'No colours in this part of the sprite yet.' }));
+  };
+  scope.onchange = build; layers.onchange = build;
+  const mapping = () => { const m = new Map(); for (const r of rows) { const to = hexToU32(r.input.value); if (to !== r.from) m.set(r.from, to); } return m; };
+  const applyTo = (cells, m) => { for (const c of cells) for (let i = 0; i < c.length; i++) { const t = m.get(c[i]); if (t !== undefined) c[i] = t; } };
+  const apply = () => {
+    const m = mapping(); if (!m.size) return toast('Change at least one colour first');
+    closeModal(); struct(() => applyTo(cellsIn(), m)); toast(`Swapped ${m.size} colour${m.size === 1 ? '' : 's'}`);
+  };
+  const variant = () => {
+    const m = mapping(); if (!m.size) return toast('Change at least one colour first');
+    const name = (S.name + ' variant').slice(0, 60);
+    const go = () => {
+      const copy = deserialize(serialize()); copy.id = 'p-' + rid(); copy.name = name;
+      const keepCa = ca, keepCf = cf, keepCl = cl;
+      const frames = scope.value === 'all' ? copy.anims.flatMap(a => a.frames) : scope.value === 'anim' ? copy.anims[keepCa].frames : [copy.anims[keepCa].frames[keepCf]];
+      applyTo(frames.flatMap(f => layers.value === 'all' ? f.cells : [f.cells[keepCl]]), m);
+      closeModal(); loadProject(copy); markDirty();
+      toast('Opened “' + name + '” — press Save to keep it. The original is unchanged.');
+    };
+    if (dirty) confirmDialog('Make a variant?', 'Save the original first if you want to keep its latest changes — the variant opens in its place.', 'Make variant', go); else go();
+  };
+  openModal('Colour swap', [
+    'Change colours everywhere they’re used, in every frame at once. Handy for recolouring a character, or making enemy variants from one sprite.',
+    el('div', { className: 'row', style: 'gap:12px' }, [el('label', {}, ['Change ', scope]), el('label', {}, ['in ', layers])]),
+    list
+  ], [btn('Cancel', closeModal), btn('Save as a new variant', variant), btn('Apply here', apply, 'primary')]);
+  build();
+}
+
+// ---------- tile map ----------
+function tilemapDialog() {
+  commitFloat();
+  const tm = S.tilemap;
+  const byId = new Map(allFrames().map(f => [f.id, f]));
+  let pickId = (FR()[cf] || {}).id, painting = null, changed = false;
+  const imgCache = new Map();
+  const tileImg = fr => { if (!imgCache.has(fr)) { const c = el('canvas', { width: S.w, height: S.h }); c.getContext('2d').putImageData(frameImage(fr), 0, 0); imgCache.set(fr, c); } return imgCache.get(fr); };
+  // tile picker
+  const tiles = el('div', { className: 'tm-tiles' });
+  const buildTiles = () => {
+    tiles.textContent = '';
+    S.anims.forEach(a => {
+      const g = el('div', { className: 'tg' });
+      a.frames.forEach((fr, i) => {
+        const c = el('canvas', { width: S.w, height: S.h, title: `${a.name} · frame ${i + 1}` });
+        c.getContext('2d').drawImage(tileImg(fr), 0, 0);
+        if (fr.id === pickId) c.classList.add('on');
+        c.onclick = () => { pickId = fr.id; buildTiles(); };
+        g.append(c);
+      });
+      tiles.append(el('h4', { textContent: a.name }), g);
+    });
+  };
+  // map canvas
+  const mapC = el('canvas'), mctx = mapC.getContext('2d');
+  const wIn = el('input', { type: 'number', value: tm.w, min: 1, max: 64 }), hIn = el('input', { type: 'number', value: tm.h, min: 1, max: 64 });
+  const gridIn = el('input', { type: 'checkbox', checked: true });
+  let ms = 1;
+  const draw = () => {
+    const vw = Math.min(window.innerWidth * .96 - 290, 900), vh = window.innerHeight * .6 - 20;
+    ms = Math.max(1, Math.floor(Math.min(vw / (tm.w * S.w), vh / (tm.h * S.h))));
+    mapC.width = tm.w * S.w * ms; mapC.height = tm.h * S.h * ms;
+    mctx.imageSmoothingEnabled = false;
+    mctx.fillStyle = '#23252b'; mctx.fillRect(0, 0, mapC.width, mapC.height);
+    for (let y = 0; y < tm.h; y++) for (let x = 0; x < tm.w; x++) {
+      const fr = byId.get(tm.tiles[y * tm.w + x]);
+      if (fr) mctx.drawImage(tileImg(fr), x * S.w * ms, y * S.h * ms, S.w * ms, S.h * ms);
+    }
+    if (gridIn.checked) {
+      mctx.strokeStyle = 'rgba(255,255,255,.12)'; mctx.beginPath();
+      for (let x = 1; x < tm.w; x++) { mctx.moveTo(x * S.w * ms + .5, 0); mctx.lineTo(x * S.w * ms + .5, mapC.height); }
+      for (let y = 1; y < tm.h; y++) { mctx.moveTo(0, y * S.h * ms + .5); mctx.lineTo(mapC.width, y * S.h * ms + .5); }
+      mctx.stroke();
+    }
+  };
+  const resize = () => {
+    const W = Math.max(1, Math.min(64, +wIn.value | 0)), H = Math.max(1, Math.min(64, +hIn.value | 0));
+    const n = new Array(W * H).fill(null);
+    for (let y = 0; y < Math.min(H, tm.h); y++) for (let x = 0; x < Math.min(W, tm.w); x++) n[y * W + x] = tm.tiles[y * tm.w + x] || null;
+    tm.w = W; tm.h = H; tm.tiles = n; changed = true; draw();
+  };
+  wIn.onchange = resize; hIn.onchange = resize; gridIn.onchange = draw;
+  const cellAt = e => { const r = mapC.getBoundingClientRect(); return { x: Math.floor((e.clientX - r.left) / r.width * tm.w), y: Math.floor((e.clientY - r.top) / r.height * tm.h) }; };
+  const paint = (e) => {
+    const p = cellAt(e); if (p.x < 0 || p.y < 0 || p.x >= tm.w || p.y >= tm.h) return;
+    const v = painting === 'erase' ? null : pickId, i = p.y * tm.w + p.x;
+    if ((tm.tiles[i] || null) !== v) { tm.tiles[i] = v; changed = true; draw(); }
+  };
+  mapC.addEventListener('contextmenu', e => e.preventDefault());
+  mapC.addEventListener('pointerdown', e => { e.preventDefault(); painting = e.button === 2 || e.shiftKey ? 'erase' : 'paint'; mapC.setPointerCapture(e.pointerId); paint(e); });
+  mapC.addEventListener('pointermove', e => { if (painting) paint(e); });
+  const stop = () => { painting = null; };
+  mapC.addEventListener('pointerup', stop); mapC.addEventListener('pointercancel', stop);
+  const fillAll = () => { tm.tiles = new Array(tm.w * tm.h).fill(pickId); changed = true; draw(); };
+  const clearAll = () => { tm.tiles = new Array(tm.w * tm.h).fill(null); changed = true; draw(); };
+  const exportMap = async () => {
+    const s = Math.max(1, +scaleSel.value), c = el('canvas', { width: tm.w * S.w * s, height: tm.h * S.h * s }), x = c.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    for (let yy = 0; yy < tm.h; yy++) for (let xx = 0; xx < tm.w; xx++) { const fr = byId.get(tm.tiles[yy * tm.w + xx]); if (fr) x.drawImage(tileImg(fr), xx * S.w * s, yy * S.h * s, S.w * s, S.h * s); }
+    offerFile(safeName() + '-map.png', await toBlob(c));
+  };
+  const scaleSel = el('select', {}, [1, 2, 4].map(s => el('option', { value: s, textContent: s + '×' })));
+  buildTiles();
+  openModal('Tile map', [
+    'Each frame is a tile. Pick one on the left, then click or drag on the map. Right-click (or Shift) erases. The map is saved with the sprite.',
+    el('div', { className: 'row', style: 'gap:12px;margin:8px 0' }, [el('label', {}, ['Map width ', wIn]), el('label', {}, ['Height ', hIn]), el('label', {}, [gridIn, 'Grid']),
+      btn('Fill with tile', fillAll, 'mini'), btn('Clear map', clearAll, 'mini danger')]),
+    el('div', { className: 'tm' }, [tiles, el('div', { className: 'tm-map' }, [mapC])])
+  ], [el('label', {}, ['Scale ', scaleSel]), btn('Export map PNG', exportMap), btn('Done', closeModal, 'primary')], true);
+  onModalClose = () => { if (changed) markDirty(); };
+  draw();
+}
+
+// ---------- files in ----------
+$('#fileProj').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const p = deserialize(JSON.parse(await f.text())); p.id = 'p-' + rid(); loadProject(p); markDirty(); }
+  catch (err) { toast('That file isn’t a Sprite Studio project'); }
+};
+$('#fileImg').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = () => { URL.revokeObjectURL(url); importImageDialog(img); };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('Couldn’t read that image'); };
+  img.src = url;
+};
+function readPixels(img, sx, sy, w, h) {
+  const c = el('canvas', { width: w, height: h }), x = c.getContext('2d');
+  x.drawImage(img, sx, sy, w, h, 0, 0, w, h);
+  const d = new Uint32Array(x.getImageData(0, 0, w, h).data.buffer.slice(0));
+  for (let i = 0; i < d.length; i++) d[i] = (d[i] >>> 24) >= 128 ? (d[i] | 0xff000000) >>> 0 : 0;
+  return d;
+}
+function importImageDialog(img) {
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  if (iw > 2048 || ih > 2048) return toast('Image is too large (max 2048px)');
+  const fw = el('input', { type: 'number', value: S.w, min: 1, max: 256 }), fh = el('input', { type: 'number', value: S.h, min: 1, max: 256 });
+  const rowsAsAnims = el('input', { type: 'checkbox', checked: true });
+  const intoLayer = () => { closeModal(); struct(() => { const c = cell(), w = Math.min(iw, S.w), h = Math.min(ih, S.h), d = readPixels(img, 0, 0, w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = d[y * w + x]; if (v) c[y * S.w + x] = v; } }); };
+  const asProject = () => {
+    if (iw > 256 || ih > 256) return toast('Max canvas is 256×256 — slice it as a sheet instead');
+    closeModal(); const p = newProject(iw, ih, 'Imported sprite'); p.anims[0].frames[0].cells[0] = readPixels(img, 0, 0, iw, ih); loadProject(p); markDirty();
+  };
+  const slice = () => {
+    const W = Math.max(1, Math.min(256, +fw.value | 0)), H = Math.max(1, Math.min(256, +fh.value | 0));
+    const cols = Math.floor(iw / W), rows = Math.floor(ih / H);
+    if (!cols || !rows) return toast('Frame size is bigger than the image');
+    if (cols * rows > 400) return toast('That would make over 400 frames — use a bigger frame size');
+    closeModal();
+    const p = newProject(W, H, 'Imported sheet'); p.anims = [];
+    let n = 0;
+    for (let r = 0; r < rows; r++) {
+      const frames = [];
+      for (let c = 0; c < cols; c++) {
+        const d = readPixels(img, c * W, r * H, W, H);
+        if (!d.some(v => v)) continue; // skip empty cells
+        frames.push({ id: rid(), cells: [d], boxes: [] }); n++;
+      }
+      if (!frames.length) continue;
+      if (rowsAsAnims.checked || !p.anims.length) p.anims.push({ name: rowsAsAnims.checked ? 'row ' + (r + 1) : 'idle', fps: 8, loop: true, frames });
+      else p.anims[0].frames.push(...frames);
+    }
+    if (!p.anims.length) p.anims.push({ name: 'idle', fps: 8, loop: true, frames: [blankFrame(W, H, 1)] });
+    loadProject(p); markDirty(); toast(`Imported ${n} frame${n === 1 ? '' : 's'}${p.anims.length > 1 ? ' into ' + p.anims.length + ' animations' : ''}`);
+  };
+  const big = (t, s, fn) => { const b = el('button', {}, [t, el('small', { textContent: s })]); b.onclick = fn; return b; };
+  openModal('Import image', [
+    `Image is ${iw}×${ih}px. Semi-transparent pixels are made fully solid or fully clear to keep edges crisp.`,
+    el('div', { className: 'expgrid' }, [big('Paste into current layer', 'Top-left corner, cropped to the canvas', intoLayer), big('New sprite from image', 'Canvas matches the image size', asProject)]),
+    el('p', { textContent: 'Or slice a sprite sheet into frames (replaces the current sprite):' }),
+    el('div', { className: 'row' }, [el('label', {}, ['Frame W ', fw]), el('label', {}, ['Frame H ', fh]), el('label', {}, [rowsAsAnims, 'Each row is an animation']), btn('Slice into frames', slice, 'primary')])
+  ], [btn('Cancel', closeModal)]);
+}
+
+// ---------- header buttons ----------
+$('#btnNew').onclick = newDialog;
+$('#btnOpen').onclick = openDialog;
+$('#btnSave').onclick = save;
+$('#btnExport').onclick = exportDialog;
+$('#btnTilemap').onclick = tilemapDialog;
+window.addEventListener('beforeunload', saveLocal);
+
+// ---------- boot ----------
+if (!inClaude && /(^|\.)adamdobrer\.ca$|^localhost$|^127\./.test(location.hostname)) $('#siteLink').hidden = false;
+const restored = loadLocal();
+if (restored) { S = restored.p; dirty = restored.dirty; } else S = newProject(32, 32);
+refreshAll();
+requestAnimationFrame(() => { fit(); setStatus(restored ? (dirty ? 'Unsaved changes' : 'Restored your last sprite') : 'Ready'); });
+})();
+</script>
+</body>
+</html>
